@@ -1,6 +1,7 @@
 # Week 1: Java Basics - Your First Steps from Python to Java
 
 ---
+Nikita Tyagi 
 
 ## 1. What is Java and Why Do Companies Like Microsoft Use It?
 
