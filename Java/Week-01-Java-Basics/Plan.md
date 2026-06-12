@@ -807,6 +807,7 @@ You'll use ArrayList 90% of the time in real projects. Arrays are mostly for int
 4. Merge two sorted arrays into one sorted array
 
 ---
+End of Day 2
 
 ## 11. Control Flow
 

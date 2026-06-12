@@ -54,62 +54,80 @@ That's encapsulation — **hiding internal details and exposing only what's nece
 
 Imagine if anyone could directly change your bank balance variable:
 ```
-sheetal.bank_balance = 999999999  # Just changed it! No validation!
+sheetal.bankBalance = 999999999;  // Just changed it! No validation!
 ```
 
 With encapsulation, the only way to change the balance is through controlled methods:
 ```
-sheetal.deposit(5000)     # This checks: is amount positive? Is account active?
-sheetal.withdraw(2000)    # This checks: do you have enough balance?
+sheetal.deposit(5000);     // This checks: is amount positive? Is account active?
+sheetal.withdraw(2000);    // This checks: do you have enough balance?
 ```
 
 ### In Code
 
-```python
-class BankAccount:
-    def __init__(self, owner, initial_balance):
-        self.owner = owner
-        self.__balance = initial_balance  # __ makes it PRIVATE (hidden from outside)
-        self.__transaction_history = []
+```java
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 
-    # Public method — the "ATM button"
-    def deposit(self, amount):
-        if amount <= 0:
-            print("Amount must be positive!")
-            return
-        self.__balance += amount
-        self.__transaction_history.append(f"Deposited: +{amount}")
-        print(f"Deposited Rs.{amount}. New balance: Rs.{self.__balance}")
+public class BankAccount {
+    private String owner;
+    private double balance;  // private makes it hidden from outside
+    private List<String> transactionHistory;
 
-    # Public method — another "ATM button"
-    def withdraw(self, amount):
-        if amount <= 0:
-            print("Amount must be positive!")
-            return
-        if amount > self.__balance:
-            print(f"Insufficient balance! You have Rs.{self.__balance}")
-            return
-        self.__balance -= amount
-        self.__transaction_history.append(f"Withdrew: -{amount}")
-        print(f"Withdrew Rs.{amount}. New balance: Rs.{self.__balance}")
+    public BankAccount(String owner, double initialBalance) {
+        this.owner = owner;
+        this.balance = initialBalance;
+        this.transactionHistory = new ArrayList<>();
+    }
 
-    # Public method — controlled access to private data
-    def get_balance(self):
-        return self.__balance
+    // Public method — the "ATM button"
+    public void deposit(double amount) {
+        if (amount <= 0) {
+            System.out.println("Amount must be positive!");
+            return;
+        }
+        this.balance += amount;
+        this.transactionHistory.add("Deposited: +" + amount);
+        System.out.println("Deposited Rs." + amount + ". New balance: Rs." + this.balance);
+    }
 
-    def get_statement(self):
-        return self.__transaction_history.copy()  # Returns a COPY, not the original
+    // Public method — another "ATM button"
+    public void withdraw(double amount) {
+        if (amount <= 0) {
+            System.out.println("Amount must be positive!");
+            return;
+        }
+        if (amount > this.balance) {
+            System.out.println("Insufficient balance! You have Rs." + this.balance);
+            return;
+        }
+        this.balance -= amount;
+        this.transactionHistory.add("Withdrew: -" + amount);
+        System.out.println("Withdrew Rs." + amount + ". New balance: Rs." + this.balance);
+    }
 
+    // Public method — controlled access to private data
+    public double getBalance() {
+        return this.balance;
+    }
 
-# Usage
-account = BankAccount("Sheetal", 10000)
-account.deposit(5000)        # Works! Goes through validation
-account.withdraw(3000)       # Works! Checks balance first
-account.withdraw(50000)      # "Insufficient balance!" — Protected!
-print(account.get_balance()) # 12000
+    public List<String> getStatement() {
+        return Collections.unmodifiableList(this.transactionHistory);  // Returns an unmodifiable view, not the original
+    }
 
-# This WON'T work — balance is hidden!
-# account.__balance = 999999  # AttributeError!
+    // Usage
+    public static void main(String[] args) {
+        BankAccount account = new BankAccount("Sheetal", 10000);
+        account.deposit(5000);        // Works! Goes through validation
+        account.withdraw(3000);       // Works! Checks balance first
+        account.withdraw(50000);      // "Insufficient balance!" — Protected!
+        System.out.println(account.getBalance()); // 12000.0
+
+        // This WON'T work — balance is hidden!
+        // account.balance = 999999;  // Compilation error! balance is private
+    }
+}
 ```
 
 ### Key Takeaway
@@ -137,71 +155,103 @@ Would you write the brand, color, speed code separately for Car, Bike, AND Truck
 
 ### In Code
 
-```python
-# PARENT class — the common stuff
-class Vehicle:
-    def __init__(self, brand, color, top_speed, fuel_type):
-        self.brand = brand
-        self.color = color
-        self.top_speed = top_speed
-        self.fuel_type = fuel_type
-        self.is_running = False
+```java
+// PARENT class — the common stuff
+class Vehicle {
+    protected String brand;
+    protected String color;
+    protected int topSpeed;
+    protected String fuelType;
+    protected boolean isRunning;
 
-    def start(self):
-        self.is_running = True
-        print(f"{self.brand} started! Vroom!")
+    public Vehicle(String brand, String color, int topSpeed, String fuelType) {
+        this.brand = brand;
+        this.color = color;
+        this.topSpeed = topSpeed;
+        this.fuelType = fuelType;
+        this.isRunning = false;
+    }
 
-    def stop(self):
-        self.is_running = False
-        print(f"{self.brand} stopped.")
+    public void start() {
+        this.isRunning = true;
+        System.out.println(this.brand + " started! Vroom!");
+    }
 
-    def describe(self):
-        print(f"{self.color} {self.brand} | Top Speed: {self.top_speed} km/h | Fuel: {self.fuel_type}")
+    public void stop() {
+        this.isRunning = false;
+        System.out.println(this.brand + " stopped.");
+    }
 
-
-# CHILD class — gets everything from Vehicle + adds its own stuff
-class Car(Vehicle):
-    def __init__(self, brand, color, top_speed, fuel_type, num_doors, trunk_liters):
-        super().__init__(brand, color, top_speed, fuel_type)  # Call parent's __init__
-        self.num_doors = num_doors          # Car-specific
-        self.trunk_liters = trunk_liters    # Car-specific
-
-    def open_trunk(self):  # Car-specific method
-        print(f"Trunk opened! Capacity: {self.trunk_liters} liters")
-
-
-class Bike(Vehicle):
-    def __init__(self, brand, color, top_speed, fuel_type, bike_type):
-        super().__init__(brand, color, top_speed, fuel_type)
-        self.bike_type = bike_type  # "sport", "cruiser", "scooter"
-
-    def wheelie(self):  # Bike-specific method
-        print(f"{self.brand} doing a wheelie!")
+    public void describe() {
+        System.out.println(this.color + " " + this.brand + " | Top Speed: " + this.topSpeed + " km/h | Fuel: " + this.fuelType);
+    }
+}
 
 
-class Truck(Vehicle):
-    def __init__(self, brand, color, top_speed, fuel_type, cargo_tons):
-        super().__init__(brand, color, top_speed, fuel_type)
-        self.cargo_tons = cargo_tons
+// CHILD class — gets everything from Vehicle + adds its own stuff
+class Car extends Vehicle {
+    private int numDoors;
+    private int trunkLiters;
 
-    def load_cargo(self, tons):
-        if tons > self.cargo_tons:
-            print(f"Too heavy! Max capacity: {self.cargo_tons} tons")
-            return
-        print(f"Loaded {tons} tons into {self.brand}")
+    public Car(String brand, String color, int topSpeed, String fuelType, int numDoors, int trunkLiters) {
+        super(brand, color, topSpeed, fuelType);  // Call parent's constructor
+        this.numDoors = numDoors;          // Car-specific
+        this.trunkLiters = trunkLiters;    // Car-specific
+    }
+
+    public void openTrunk() {  // Car-specific method
+        System.out.println("Trunk opened! Capacity: " + this.trunkLiters + " liters");
+    }
+}
 
 
-# Usage
-my_car = Car("Hyundai Creta", "White", 180, "Petrol", 5, 433)
-my_car.start()       # Inherited from Vehicle — "Hyundai Creta started! Vroom!"
-my_car.describe()    # Inherited from Vehicle
-my_car.open_trunk()  # Car's own method
+class Bike extends Vehicle {
+    private String bikeType;
 
-my_bike = Bike("Royal Enfield", "Black", 120, "Petrol", "cruiser")
-my_bike.start()      # Inherited from Vehicle
-my_bike.wheelie()    # Bike's own method
+    public Bike(String brand, String color, int topSpeed, String fuelType, String bikeType) {
+        super(brand, color, topSpeed, fuelType);
+        this.bikeType = bikeType;  // "sport", "cruiser", "scooter"
+    }
 
-# Notice: start(), stop(), describe() were written ONCE but work for all 3!
+    public void wheelie() {  // Bike-specific method
+        System.out.println(this.brand + " doing a wheelie!");
+    }
+}
+
+
+class Truck extends Vehicle {
+    private double cargoTons;
+
+    public Truck(String brand, String color, int topSpeed, String fuelType, double cargoTons) {
+        super(brand, color, topSpeed, fuelType);
+        this.cargoTons = cargoTons;
+    }
+
+    public void loadCargo(double tons) {
+        if (tons > this.cargoTons) {
+            System.out.println("Too heavy! Max capacity: " + this.cargoTons + " tons");
+            return;
+        }
+        System.out.println("Loaded " + tons + " tons into " + this.brand);
+    }
+}
+
+
+// Usage
+public class Main {
+    public static void main(String[] args) {
+        Car myCar = new Car("Hyundai Creta", "White", 180, "Petrol", 5, 433);
+        myCar.start();       // Inherited from Vehicle — "Hyundai Creta started! Vroom!"
+        myCar.describe();    // Inherited from Vehicle
+        myCar.openTrunk();   // Car's own method
+
+        Bike myBike = new Bike("Royal Enfield", "Black", 120, "Petrol", "cruiser");
+        myBike.start();      // Inherited from Vehicle
+        myBike.wheelie();    // Bike's own method
+
+        // Notice: start(), stop(), describe() were written ONCE but work for all 3!
+    }
+}
 ```
 
 ### Key Takeaway
@@ -229,55 +279,73 @@ In software, this means: you can call the same method name on different objects,
 Imagine you're building Zomato. You need to calculate delivery charges for different vehicle types:
 
 **Without polymorphism** (ugly, fragile):
-```python
-def calculate_delivery_charge(vehicle_type, distance):
-    if vehicle_type == "bike":
-        return distance * 5
-    elif vehicle_type == "car":
-        return distance * 12
-    elif vehicle_type == "bicycle":
-        return distance * 3
-    elif vehicle_type == "drone":
-        return distance * 20
-    # Every new vehicle type = modify this function!
-    # What if someone misspells "bike" as "bik"? Silent bug!
+```java
+public class DeliveryChargeCalculator {
+    public static double calculateDeliveryCharge(String vehicleType, double distance) {
+        if (vehicleType.equals("bike")) {
+            return distance * 5;
+        } else if (vehicleType.equals("car")) {
+            return distance * 12;
+        } else if (vehicleType.equals("bicycle")) {
+            return distance * 3;
+        } else if (vehicleType.equals("drone")) {
+            return distance * 20;
+        }
+        // Every new vehicle type = modify this function!
+        // What if someone misspells "bike" as "bik"? Silent bug!
+        return 0;
+    }
+}
 ```
 
 **With polymorphism** (clean, extensible):
-```python
-class DeliveryVehicle:
-    def calculate_charge(self, distance):
-        raise NotImplementedError("Each vehicle must define its charge!")
+```java
+abstract class DeliveryVehicle {
+    public abstract double calculateCharge(double distance);
+}
 
-class BikeDelivery(DeliveryVehicle):
-    def calculate_charge(self, distance):
-        return distance * 5  # Rs. 5 per km
+class BikeDelivery extends DeliveryVehicle {
+    public double calculateCharge(double distance) {
+        return distance * 5;  // Rs. 5 per km
+    }
+}
 
-class CarDelivery(DeliveryVehicle):
-    def calculate_charge(self, distance):
-        return distance * 12  # Rs. 12 per km
+class CarDelivery extends DeliveryVehicle {
+    public double calculateCharge(double distance) {
+        return distance * 12;  // Rs. 12 per km
+    }
+}
 
-class DroneDelivery(DeliveryVehicle):
-    def calculate_charge(self, distance):
-        return distance * 20  # Rs. 20 per km
+class DroneDelivery extends DeliveryVehicle {
+    public double calculateCharge(double distance) {
+        return distance * 20;  // Rs. 20 per km
+    }
+}
 
 
-# The BEAUTY of polymorphism:
-def process_delivery(vehicle: DeliveryVehicle, distance):
-    charge = vehicle.calculate_charge(distance)  # Same method call for ANY vehicle!
-    print(f"Delivery charge: Rs.{charge}")
+// The BEAUTY of polymorphism:
+public class Main {
+    public static void processDelivery(DeliveryVehicle vehicle, double distance) {
+        double charge = vehicle.calculateCharge(distance);  // Same method call for ANY vehicle!
+        System.out.println("Delivery charge: Rs." + charge);
+    }
 
-# Works with ANY vehicle — present or future!
-process_delivery(BikeDelivery(), 10)    # Rs.50
-process_delivery(CarDelivery(), 10)     # Rs.120
-process_delivery(DroneDelivery(), 10)   # Rs.200
+    public static void main(String[] args) {
+        // Works with ANY vehicle — present or future!
+        processDelivery(new BikeDelivery(), 10);    // Rs.50.0
+        processDelivery(new CarDelivery(), 10);     // Rs.120.0
+        processDelivery(new DroneDelivery(), 10);   // Rs.200.0
 
-# Adding a new vehicle? Just add a new class. ZERO changes to existing code!
-class BicycleDelivery(DeliveryVehicle):
-    def calculate_charge(self, distance):
-        return distance * 3
+        // Adding a new vehicle? Just add a new class. ZERO changes to existing code!
+        processDelivery(new BicycleDelivery(), 10);  // Rs.30.0 — works immediately!
+    }
+}
 
-process_delivery(BicycleDelivery(), 10)  # Rs.30 — works immediately!
+class BicycleDelivery extends DeliveryVehicle {
+    public double calculateCharge(double distance) {
+        return distance * 3;
+    }
+}
 ```
 
 ### Key Takeaway
@@ -308,75 +376,89 @@ Abstraction means: **define WHAT something does, not HOW it does it.** You creat
 
 ### In Code
 
-```python
-from abc import ABC, abstractmethod
+```java
+import java.util.HashMap;
+import java.util.Map;
 
-# Abstract class — defines WHAT a payment processor does
-# But NOT how — that's for each specific processor to decide
-class PaymentProcessor(ABC):
+// Abstract class — defines WHAT a payment processor does
+// But NOT how — that's for each specific processor to decide
+abstract class PaymentProcessor {
 
-    @abstractmethod
-    def process_payment(self, amount, customer_id):
-        """Process a payment. Each processor implements this differently."""
-        pass
+    public abstract Map<String, String> processPayment(double amount, String customerId);
 
-    @abstractmethod
-    def refund(self, transaction_id):
-        """Refund a payment."""
-        pass
+    public abstract boolean refund(String transactionId);
 
-    @abstractmethod
-    def get_transaction_status(self, transaction_id):
-        """Check if a transaction succeeded."""
-        pass
+    public abstract String getTransactionStatus(String transactionId);
+}
 
 
-# Concrete class — defines HOW UPI payment actually works
-class UPIPayment(PaymentProcessor):
-    def process_payment(self, amount, customer_id):
-        print(f"Opening UPI app...")
-        print(f"Requesting Rs.{amount} from {customer_id}'s UPI ID")
-        print("Waiting for PIN entry...")
-        return {"status": "success", "method": "UPI", "txn_id": "UPI123"}
+// Concrete class — defines HOW UPI payment actually works
+class UPIPayment extends PaymentProcessor {
+    public Map<String, String> processPayment(double amount, String customerId) {
+        System.out.println("Opening UPI app...");
+        System.out.println("Requesting Rs." + amount + " from " + customerId + "'s UPI ID");
+        System.out.println("Waiting for PIN entry...");
+        Map<String, String> result = new HashMap<>();
+        result.put("status", "success");
+        result.put("method", "UPI");
+        result.put("txn_id", "UPI123");
+        return result;
+    }
 
-    def refund(self, transaction_id):
-        print(f"UPI refund initiated for {transaction_id}")
-        print("Amount will be credited in 2 minutes")
-        return True
+    public boolean refund(String transactionId) {
+        System.out.println("UPI refund initiated for " + transactionId);
+        System.out.println("Amount will be credited in 2 minutes");
+        return true;
+    }
 
-    def get_transaction_status(self, transaction_id):
-        return "completed"
-
-
-# Concrete class — defines HOW Card payment actually works
-class CardPayment(PaymentProcessor):
-    def process_payment(self, amount, customer_id):
-        print(f"Charging Rs.{amount} to card ending in ****4532")
-        print("Contacting bank gateway... OTP sent to registered mobile...")
-        return {"status": "success", "method": "Card", "txn_id": "CARD456"}
-
-    def refund(self, transaction_id):
-        print(f"Card refund for {transaction_id}")
-        print("Refund will appear in 5-7 business days")
-        return True
-
-    def get_transaction_status(self, transaction_id):
-        return "completed"
+    public String getTransactionStatus(String transactionId) {
+        return "completed";
+    }
+}
 
 
-# Your checkout code doesn't care WHICH payment method — it just works!
-def checkout(payment: PaymentProcessor, amount, customer_id):
-    result = payment.process_payment(amount, customer_id)
-    status = payment.get_transaction_status(result['txn_id'])
-    print(f"Payment {result['status']}! Method: {result['method']}")
+// Concrete class — defines HOW Card payment actually works
+class CardPayment extends PaymentProcessor {
+    public Map<String, String> processPayment(double amount, String customerId) {
+        System.out.println("Charging Rs." + amount + " to card ending in ****4532");
+        System.out.println("Contacting bank gateway... OTP sent to registered mobile...");
+        Map<String, String> result = new HashMap<>();
+        result.put("status", "success");
+        result.put("method", "Card");
+        result.put("txn_id", "CARD456");
+        return result;
+    }
 
-checkout(UPIPayment(), 499, "sheetal_123")    # UPI flow
-checkout(CardPayment(), 499, "sheetal_123")    # Card flow
-# Both work! checkout() doesn't know or care about the internal details
+    public boolean refund(String transactionId) {
+        System.out.println("Card refund for " + transactionId);
+        System.out.println("Refund will appear in 5-7 business days");
+        return true;
+    }
 
-# You CANNOT do this:
-# p = PaymentProcessor()  # ERROR! Abstract class can't be created directly
-# It's just a blueprint — not a real thing
+    public String getTransactionStatus(String transactionId) {
+        return "completed";
+    }
+}
+
+
+// Your checkout code doesn't care WHICH payment method — it just works!
+public class Main {
+    public static void checkout(PaymentProcessor payment, double amount, String customerId) {
+        Map<String, String> result = payment.processPayment(amount, customerId);
+        String status = payment.getTransactionStatus(result.get("txn_id"));
+        System.out.println("Payment " + result.get("status") + "! Method: " + result.get("method"));
+    }
+
+    public static void main(String[] args) {
+        checkout(new UPIPayment(), 499, "sheetal_123");    // UPI flow
+        checkout(new CardPayment(), 499, "sheetal_123");    // Card flow
+        // Both work! checkout() doesn't know or care about the internal details
+
+        // You CANNOT do this:
+        // PaymentProcessor p = new PaymentProcessor();  // ERROR! Abstract class can't be instantiated
+        // It's just a blueprint — not a real thing
+    }
+}
 ```
 
 ### Key Takeaway
@@ -438,73 +520,98 @@ Now imagine ONE person does ALL of this. What happens?
 At Zomato, imagine one class that handles everything about an order:
 
 **Bad Code (One class, 6 responsibilities):**
-```python
-class OrderManager:
-    def create_order(self, items, user):
-        # Creates the order in database
-        print(f"Order created for {user}")
+```java
+public class OrderManager {
+    public void createOrder(List<Item> items, User user) {
+        // Creates the order in database
+        System.out.println("Order created for " + user);
+    }
 
-    def calculate_total(self, items):
-        # Calculates price with tax and discount
-        total = sum(item.price for item in items)
-        return total * 1.18  # 18% GST
+    public double calculateTotal(List<Item> items) {
+        // Calculates price with tax and discount
+        double total = items.stream().mapToDouble(Item::getPrice).sum();
+        return total * 1.18;  // 18% GST
+    }
 
-    def charge_payment(self, amount, payment_method):
-        # Charges the customer
-        print(f"Charging Rs.{amount} via {payment_method}")
+    public void chargePayment(double amount, String paymentMethod) {
+        // Charges the customer
+        System.out.println("Charging Rs." + amount + " via " + paymentMethod);
+    }
 
-    def send_confirmation_sms(self, user, order_id):
-        # Sends SMS to customer
-        print(f"SMS sent to {user.phone}: Order #{order_id} confirmed!")
+    public void sendConfirmationSms(User user, String orderId) {
+        // Sends SMS to customer
+        System.out.println("SMS sent to " + user.getPhone() + ": Order #" + orderId + " confirmed!");
+    }
 
-    def notify_restaurant(self, restaurant, order):
-        # Tells restaurant about new order
-        print(f"New order sent to {restaurant.name}")
+    public void notifyRestaurant(Restaurant restaurant, Order order) {
+        // Tells restaurant about new order
+        System.out.println("New order sent to " + restaurant.getName());
+    }
 
-    def assign_delivery_partner(self, order):
-        # Finds and assigns delivery person
-        print(f"Delivery partner assigned for order #{order.id}")
+    public void assignDeliveryPartner(Order order) {
+        // Finds and assigns delivery person
+        System.out.println("Delivery partner assigned for order #" + order.getId());
+    }
+}
 ```
 
 **What's wrong?** If the SMS provider changes (Twilio → AWS SNS), you modify `OrderManager`. If the payment logic changes, you modify `OrderManager`. If delivery assignment algorithm changes, you modify `OrderManager`. **One class changes for 6 different reasons!** And every time you change it, you might accidentally break something unrelated.
 
 **Good Code (Each class has ONE job):**
-```python
-class OrderService:
-    """Creates and manages orders — that's it"""
-    def create_order(self, items, user):
-        total = self.calculate_total(items)
-        order_id = f"ORD-{user.id}-{int(time.time())}"
-        print(f"Order {order_id} created for {user.name}. Total: Rs.{total}")
-        return order_id
+```java
+import java.util.List;
 
-    def calculate_total(self, items):
-        subtotal = sum(item.price for item in items)
-        gst = subtotal * 0.18
-        return subtotal + gst
+// Creates and manages orders — that's it
+class OrderService {
+    public String createOrder(List<Item> items, User user) {
+        double total = calculateTotal(items);
+        String orderId = "ORD-" + user.getId() + "-" + System.currentTimeMillis();
+        System.out.println("Order " + orderId + " created for " + user.getName() + ". Total: Rs." + total);
+        return orderId;
+    }
 
-
-class PaymentService:
-    """Handles payments — that's it"""
-    def charge(self, amount, payment_method, customer_id):
-        print(f"Charging Rs.{amount} via {payment_method} for customer {customer_id}")
-        return {"status": "success", "txn_id": "TXN123"}
+    public double calculateTotal(List<Item> items) {
+        double subtotal = items.stream().mapToDouble(Item::getPrice).sum();
+        double gst = subtotal * 0.18;
+        return subtotal + gst;
+    }
+}
 
 
-class NotificationService:
-    """Sends notifications — that's it"""
-    def send_order_confirmation(self, user_phone, order_id):
-        print(f"SMS to {user_phone}: Your order #{order_id} is confirmed!")
+// Handles payments — that's it
+class PaymentService {
+    public Map<String, String> charge(double amount, String paymentMethod, String customerId) {
+        System.out.println("Charging Rs." + amount + " via " + paymentMethod + " for customer " + customerId);
+        Map<String, String> result = new HashMap<>();
+        result.put("status", "success");
+        result.put("txn_id", "TXN123");
+        return result;
+    }
+}
 
-    def notify_restaurant(self, restaurant_phone, order_id):
-        print(f"Alert to restaurant: New order #{order_id}")
+
+// Sends notifications — that's it
+class NotificationService {
+    public void sendOrderConfirmation(String userPhone, String orderId) {
+        System.out.println("SMS to " + userPhone + ": Your order #" + orderId + " is confirmed!");
+    }
+
+    public void notifyRestaurant(String restaurantPhone, String orderId) {
+        System.out.println("Alert to restaurant: New order #" + orderId);
+    }
+}
 
 
-class DeliveryService:
-    """Manages delivery partners — that's it"""
-    def assign_partner(self, order_id, pickup_location, drop_location):
-        print(f"Finding nearest delivery partner for #{order_id}...")
-        return {"partner": "Rahul", "eta": "15 min"}
+// Manages delivery partners — that's it
+class DeliveryService {
+    public Map<String, String> assignPartner(String orderId, String pickupLocation, String dropLocation) {
+        System.out.println("Finding nearest delivery partner for #" + orderId + "...");
+        Map<String, String> result = new HashMap<>();
+        result.put("partner", "Rahul");
+        result.put("eta", "15 min");
+        return result;
+    }
+}
 ```
 
 Now if SMS provider changes → only `NotificationService` changes.
@@ -537,76 +644,91 @@ Another example — **USB ports**:
 You're building a discount system for Flipkart:
 
 **Bad Code (Must modify existing code for every new discount type):**
-```python
-class DiscountCalculator:
-    def calculate(self, customer_type, amount):
-        if customer_type == "regular":
-            return amount * 0.05          # 5% off
-        elif customer_type == "premium":
-            return amount * 0.15          # 15% off
-        elif customer_type == "gold":
-            return amount * 0.20          # 20% off
-        # Product manager says "add student discount!"
-        # You MUST modify this existing method
-        # What if you accidentally break the "premium" logic while adding "student"?
-        # What if there are 20 discount types? This becomes a 200-line if/elif chain!
+```java
+public class DiscountCalculator {
+    public double calculate(String customerType, double amount) {
+        if (customerType.equals("regular")) {
+            return amount * 0.05;          // 5% off
+        } else if (customerType.equals("premium")) {
+            return amount * 0.15;          // 15% off
+        } else if (customerType.equals("gold")) {
+            return amount * 0.20;          // 20% off
+        }
+        // Product manager says "add student discount!"
+        // You MUST modify this existing method
+        // What if you accidentally break the "premium" logic while adding "student"?
+        // What if there are 20 discount types? This becomes a 200-line if/elif chain!
+        return 0;
+    }
+}
 ```
 
 **Good Code (Add new discounts without touching existing code):**
-```python
-from abc import ABC, abstractmethod
-
-class DiscountStrategy(ABC):
-    """The "socket" — defines what a discount must do"""
-    @abstractmethod
-    def calculate(self, amount):
-        pass
-
-    @abstractmethod
-    def description(self):
-        pass
+```java
+// The "socket" — defines what a discount must do
+abstract class DiscountStrategy {
+    public abstract double calculate(double amount);
+    public abstract String description();
+}
 
 
-class RegularDiscount(DiscountStrategy):
-    def calculate(self, amount):
-        return amount * 0.05
-    def description(self):
-        return "Regular member: 5% off"
+class RegularDiscount extends DiscountStrategy {
+    public double calculate(double amount) {
+        return amount * 0.05;
+    }
+    public String description() {
+        return "Regular member: 5% off";
+    }
+}
 
-class PremiumDiscount(DiscountStrategy):
-    def calculate(self, amount):
-        return amount * 0.15
-    def description(self):
-        return "Premium member: 15% off"
+class PremiumDiscount extends DiscountStrategy {
+    public double calculate(double amount) {
+        return amount * 0.15;
+    }
+    public String description() {
+        return "Premium member: 15% off";
+    }
+}
 
-class GoldDiscount(DiscountStrategy):
-    def calculate(self, amount):
-        return amount * 0.20
-    def description(self):
-        return "Gold member: 20% off"
-
-
-# The checkout code — NEVER needs to change!
-def apply_discount(strategy: DiscountStrategy, amount):
-    discount = strategy.calculate(amount)
-    final = amount - discount
-    print(f"{strategy.description()}")
-    print(f"Original: Rs.{amount} | Discount: Rs.{discount} | Pay: Rs.{final}")
-
-apply_discount(GoldDiscount(), 10000)
-# Gold member: 20% off
-# Original: Rs.10000 | Discount: Rs.2000 | Pay: Rs.8000
+class GoldDiscount extends DiscountStrategy {
+    public double calculate(double amount) {
+        return amount * 0.20;
+    }
+    public String description() {
+        return "Gold member: 20% off";
+    }
+}
 
 
-# 3 months later: "Add student discount!" — just add a NEW class!
-class StudentDiscount(DiscountStrategy):
-    def calculate(self, amount):
-        return amount * 0.25  # 25% off for students
-    def description(self):
-        return "Student discount: 25% off"
+public class Main {
+    // The checkout code — NEVER needs to change!
+    public static void applyDiscount(DiscountStrategy strategy, double amount) {
+        double discount = strategy.calculate(amount);
+        double finalAmount = amount - discount;
+        System.out.println(strategy.description());
+        System.out.println("Original: Rs." + amount + " | Discount: Rs." + discount + " | Pay: Rs." + finalAmount);
+    }
 
-# ZERO changes to existing code. Existing discounts still work perfectly.
-apply_discount(StudentDiscount(), 10000)  # Works immediately!
+    public static void main(String[] args) {
+        applyDiscount(new GoldDiscount(), 10000);
+        // Gold member: 20% off
+        // Original: Rs.10000.0 | Discount: Rs.2000.0 | Pay: Rs.8000.0
+
+
+        // 3 months later: "Add student discount!" — just add a NEW class!
+        applyDiscount(new StudentDiscount(), 10000);  // Works immediately!
+    }
+}
+
+// ZERO changes to existing code. Existing discounts still work perfectly.
+class StudentDiscount extends DiscountStrategy {
+    public double calculate(double amount) {
+        return amount * 0.25;  // 25% off for students
+    }
+    public String description() {
+        return "Student discount: 25% off";
+    }
+}
 ```
 
 ### Key Takeaway
@@ -640,68 +762,85 @@ Your TV remote says it works with "any TV":
 ### Real Software Example
 
 **Bad Code (Penguin breaks Bird's promise):**
-```python
-class Bird:
-    def fly(self):
-        print("Flying high!")
+```java
+class Bird {
+    public void fly() {
+        System.out.println("Flying high!");
+    }
 
-    def eat(self):
-        print("Eating food")
+    public void eat() {
+        System.out.println("Eating food");
+    }
+}
 
-class Sparrow(Bird):
-    def fly(self):
-        print("Sparrow flying!")  # Works fine!
+class Sparrow extends Bird {
+    @Override
+    public void fly() {
+        System.out.println("Sparrow flying!");  // Works fine!
+    }
+}
 
-class Penguin(Bird):
-    def fly(self):
-        raise Exception("I can't fly!")
-        # BREAKS the promise!
-        # Any code that has a list of Birds and calls .fly()
-        # will CRASH when it hits a Penguin!
+class Penguin extends Bird {
+    @Override
+    public void fly() {
+        throw new UnsupportedOperationException("I can't fly!");
+        // BREAKS the promise!
+        // Any code that has a list of Birds and calls .fly()
+        // will CRASH when it hits a Penguin!
+    }
+}
 ```
 
 Imagine this code somewhere in the app:
-```python
-def bird_show(birds):
-    for bird in birds:
-        bird.fly()  # Works for Sparrow, Eagle, Parrot... CRASHES on Penguin!
+```java
+public static void birdShow(List<Bird> birds) {
+    for (Bird bird : birds) {
+        bird.fly();  // Works for Sparrow, Eagle, Parrot... CRASHES on Penguin!
+    }
+}
 ```
 
 **Good Code (Honest class hierarchy):**
-```python
-class Bird(ABC):
-    """All birds can eat and make sounds"""
-    @abstractmethod
-    def eat(self): pass
+```java
+import java.util.List;
 
-    @abstractmethod
-    def make_sound(self): pass
+// All birds can eat and make sounds
+abstract class Bird {
+    public abstract void eat();
+    public abstract void makeSound();
+}
 
-class FlyingBird(Bird):
-    """Only birds that CAN fly"""
-    @abstractmethod
-    def fly(self): pass
+// Only birds that CAN fly
+abstract class FlyingBird extends Bird {
+    public abstract void fly();
+}
 
-class SwimmingBird(Bird):
-    """Only birds that swim"""
-    @abstractmethod
-    def swim(self): pass
+// Only birds that swim
+abstract class SwimmingBird extends Bird {
+    public abstract void swim();
+}
 
-class Sparrow(FlyingBird):
-    def eat(self): print("Sparrow eating seeds")
-    def make_sound(self): print("Chirp chirp!")
-    def fly(self): print("Sparrow soaring!")
+class Sparrow extends FlyingBird {
+    public void eat() { System.out.println("Sparrow eating seeds"); }
+    public void makeSound() { System.out.println("Chirp chirp!"); }
+    public void fly() { System.out.println("Sparrow soaring!"); }
+}
 
-class Penguin(SwimmingBird):
-    def eat(self): print("Penguin eating fish")
-    def make_sound(self): print("Squawk!")
-    def swim(self): print("Penguin diving deep!")
-    # No fly() method — because Penguin never promised it could fly!
+class Penguin extends SwimmingBird {
+    public void eat() { System.out.println("Penguin eating fish"); }
+    public void makeSound() { System.out.println("Squawk!"); }
+    public void swim() { System.out.println("Penguin diving deep!"); }
+    // No fly() method — because Penguin never promised it could fly!
+}
 
-# Now this is SAFE:
-def flying_bird_show(birds: list[FlyingBird]):
-    for bird in birds:
-        bird.fly()  # Only FlyingBirds here — no Penguins, no crashes!
+public class Main {
+    // Now this is SAFE:
+    public static void flyingBirdShow(List<FlyingBird> birds) {
+        for (FlyingBird bird : birds) {
+            bird.fly();  // Only FlyingBirds here — no Penguins, no crashes!
+        }
+    }
+}
 ```
 
 ---
@@ -728,81 +867,77 @@ A software engineer filling this form writes "N/A" for driving license, medical 
 ### Real Software Example
 
 **Bad Code (One fat interface forces useless implementations):**
-```python
-class SmartDevice(ABC):
-    @abstractmethod
-    def make_call(self): pass
+```java
+interface SmartDevice {
+    void makeCall();
+    void sendText();
+    void browseInternet();
+    void takePhoto();
+    void scanFingerprint();
+}
 
-    @abstractmethod
-    def send_text(self): pass
+class iPhone implements SmartDevice {
+    public void makeCall() { System.out.println("Calling via iPhone..."); }
+    public void sendText() { System.out.println("iMessage sent!"); }
+    public void browseInternet() { System.out.println("Safari opened!"); }
+    public void takePhoto() { System.out.println("Click! Photo taken!"); }
+    public void scanFingerprint() { System.out.println("Touch ID verified!"); }
+    // iPhone can do ALL of these — no problem!
+}
 
-    @abstractmethod
-    def browse_internet(self): pass
-
-    @abstractmethod
-    def take_photo(self): pass
-
-    @abstractmethod
-    def scan_fingerprint(self): pass
-
-class iPhone(SmartDevice):
-    def make_call(self): print("Calling via iPhone...")
-    def send_text(self): print("iMessage sent!")
-    def browse_internet(self): print("Safari opened!")
-    def take_photo(self): print("Click! Photo taken!")
-    def scan_fingerprint(self): print("Touch ID verified!")
-    # iPhone can do ALL of these — no problem!
-
-class NokiaBasicPhone(SmartDevice):
-    def make_call(self): print("Calling...")
-    def send_text(self): print("SMS sent!")
-    def browse_internet(self): pass         # Can't do this!
-    def take_photo(self): pass               # Can't do this!
-    def scan_fingerprint(self): pass         # Can't do this!
-    # Nokia is FORCED to implement 3 methods it can't do. Ugly!
+class NokiaBasicPhone implements SmartDevice {
+    public void makeCall() { System.out.println("Calling..."); }
+    public void sendText() { System.out.println("SMS sent!"); }
+    public void browseInternet() { }         // Can't do this!
+    public void takePhoto() { }               // Can't do this!
+    public void scanFingerprint() { }         // Can't do this!
+    // Nokia is FORCED to implement 3 methods it can't do. Ugly!
+}
 ```
 
 **Good Code (Small, focused interfaces):**
-```python
-class Callable(ABC):
-    """Can make phone calls"""
-    @abstractmethod
-    def make_call(self): pass
+```java
+// Can make phone calls
+interface Callable {
+    void makeCall();
+}
 
-class Messageable(ABC):
-    """Can send text messages"""
-    @abstractmethod
-    def send_text(self): pass
+// Can send text messages
+interface Messageable {
+    void sendText();
+}
 
-class InternetEnabled(ABC):
-    """Can browse the internet"""
-    @abstractmethod
-    def browse_internet(self): pass
+// Can browse the internet
+interface InternetEnabled {
+    void browseInternet();
+}
 
-class CameraEnabled(ABC):
-    """Has a camera"""
-    @abstractmethod
-    def take_photo(self): pass
+// Has a camera
+interface CameraEnabled {
+    void takePhoto();
+}
 
-class BiometricEnabled(ABC):
-    """Has fingerprint/face scanner"""
-    @abstractmethod
-    def scan_fingerprint(self): pass
+// Has fingerprint/face scanner
+interface BiometricEnabled {
+    void scanFingerprint();
+}
 
 
-# iPhone implements ALL (because it CAN do all)
-class iPhone(Callable, Messageable, InternetEnabled, CameraEnabled, BiometricEnabled):
-    def make_call(self): print("Calling via iPhone...")
-    def send_text(self): print("iMessage sent!")
-    def browse_internet(self): print("Safari opened!")
-    def take_photo(self): print("Click!")
-    def scan_fingerprint(self): print("Touch ID!")
+// iPhone implements ALL (because it CAN do all)
+class iPhone implements Callable, Messageable, InternetEnabled, CameraEnabled, BiometricEnabled {
+    public void makeCall() { System.out.println("Calling via iPhone..."); }
+    public void sendText() { System.out.println("iMessage sent!"); }
+    public void browseInternet() { System.out.println("Safari opened!"); }
+    public void takePhoto() { System.out.println("Click!"); }
+    public void scanFingerprint() { System.out.println("Touch ID!"); }
+}
 
-# Nokia implements ONLY what it can actually do
-class NokiaBasicPhone(Callable, Messageable):
-    def make_call(self): print("Calling...")
-    def send_text(self): print("SMS sent!")
-    # No fake empty methods! Clean and honest.
+// Nokia implements ONLY what it can actually do
+class NokiaBasicPhone implements Callable, Messageable {
+    public void makeCall() { System.out.println("Calling..."); }
+    public void sendText() { System.out.println("SMS sent!"); }
+    // No fake empty methods! Clean and honest.
+}
 ```
 
 ---
@@ -827,102 +962,139 @@ Now imagine your laptop was hardwired to ONLY work with one specific Apple charg
 ### Real Software Example
 
 **Bad Code (UserService is married to MySQL forever):**
-```python
-class MySQLDatabase:
-    def save(self, data):
-        print(f"INSERT INTO users VALUES ('{data['name']}', '{data['email']}')")
+```java
+class MySQLDatabase {
+    public void save(Map<String, String> data) {
+        System.out.println("INSERT INTO users VALUES ('" + data.get("name") + "', '" + data.get("email") + "')");
+    }
+}
 
-class UserService:
-    def __init__(self):
-        self.db = MySQLDatabase()  # HARDCODED! Stuck with MySQL forever!
+class UserService {
+    private MySQLDatabase db;
 
-    def create_user(self, name, email):
-        self.db.save({"name": name, "email": email})
+    public UserService() {
+        this.db = new MySQLDatabase();  // HARDCODED! Stuck with MySQL forever!
+    }
 
-# Problems:
-# 1. Want to switch to MongoDB? Must CHANGE UserService
-# 2. Want to test without a real database? Must CHANGE UserService
-# 3. UserService (business logic) is tied to MySQL (infrastructure detail)
+    public void createUser(String name, String email) {
+        Map<String, String> data = new HashMap<>();
+        data.put("name", name);
+        data.put("email", email);
+        this.db.save(data);
+    }
+}
+
+// Problems:
+// 1. Want to switch to MongoDB? Must CHANGE UserService
+// 2. Want to test without a real database? Must CHANGE UserService
+// 3. UserService (business logic) is tied to MySQL (infrastructure detail)
 ```
 
 **Good Code (UserService depends on abstraction, works with ANY database):**
-```python
-from abc import ABC, abstractmethod
+```java
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
-# The abstraction (the "USB-C standard")
-class Database(ABC):
-    @abstractmethod
-    def save(self, data): pass
-
-    @abstractmethod
-    def find(self, query): pass
-
-    @abstractmethod
-    def delete(self, id): pass
-
-
-# Implementation 1: MySQL
-class MySQLDatabase(Database):
-    def save(self, data):
-        print(f"MySQL: INSERT INTO users VALUES (...)")
-
-    def find(self, query):
-        print(f"MySQL: SELECT * FROM users WHERE {query}")
-
-    def delete(self, id):
-        print(f"MySQL: DELETE FROM users WHERE id = {id}")
+// The abstraction (the "USB-C standard")
+interface Database {
+    void save(Map<String, String> data);
+    void find(String query);
+    void delete(String id);
+}
 
 
-# Implementation 2: MongoDB
-class MongoDatabase(Database):
-    def save(self, data):
-        print(f"MongoDB: db.users.insertOne({data})")
+// Implementation 1: MySQL
+class MySQLDatabase implements Database {
+    public void save(Map<String, String> data) {
+        System.out.println("MySQL: INSERT INTO users VALUES (...)");
+    }
 
-    def find(self, query):
-        print(f"MongoDB: db.users.find({query})")
+    public void find(String query) {
+        System.out.println("MySQL: SELECT * FROM users WHERE " + query);
+    }
 
-    def delete(self, id):
-        print(f"MongoDB: db.users.deleteOne({{_id: {id}}})")
-
-
-# Implementation 3: Fake database for testing (no real DB needed!)
-class FakeDatabase(Database):
-    def __init__(self):
-        self.storage = []
-
-    def save(self, data):
-        self.storage.append(data)
-        print(f"Fake DB: Stored {data}")
-
-    def find(self, query):
-        return [d for d in self.storage if query in str(d)]
-
-    def delete(self, id):
-        self.storage = [d for d in self.storage if d.get('id') != id]
+    public void delete(String id) {
+        System.out.println("MySQL: DELETE FROM users WHERE id = " + id);
+    }
+}
 
 
-# UserService depends on the ABSTRACTION (Database), not specific implementation
-class UserService:
-    def __init__(self, db: Database):  # Accepts ANY database!
-        self.db = db
+// Implementation 2: MongoDB
+class MongoDatabase implements Database {
+    public void save(Map<String, String> data) {
+        System.out.println("MongoDB: db.users.insertOne(" + data + ")");
+    }
 
-    def create_user(self, name, email):
-        self.db.save({"name": name, "email": email})
+    public void find(String query) {
+        System.out.println("MongoDB: db.users.find(" + query + ")");
+    }
 
-    def find_user(self, email):
-        return self.db.find(f"email={email}")
+    public void delete(String id) {
+        System.out.println("MongoDB: db.users.deleteOne({_id: " + id + "})");
+    }
+}
 
 
-# Production — use MongoDB
-service = UserService(MongoDatabase())
-service.create_user("Sheetal", "sheetal@gmail.com")
+// Implementation 3: Fake database for testing (no real DB needed!)
+class FakeDatabase implements Database {
+    private List<Map<String, String>> storage = new ArrayList<>();
 
-# Testing — use fake DB (fast, no real database needed)
-test_service = UserService(FakeDatabase())
-test_service.create_user("Test User", "test@test.com")
+    public void save(Map<String, String> data) {
+        storage.add(data);
+        System.out.println("Fake DB: Stored " + data);
+    }
 
-# Switching databases? Change ONE line where you create UserService.
-# UserService itself doesn't change AT ALL.
+    public void find(String query) {
+        List<Map<String, String>> results = storage.stream()
+            .filter(d -> d.toString().contains(query))
+            .collect(Collectors.toList());
+        System.out.println("Fake DB: Found " + results);
+    }
+
+    public void delete(String id) {
+        storage.removeIf(d -> id.equals(d.get("id")));
+    }
+}
+
+
+// UserService depends on the ABSTRACTION (Database), not specific implementation
+class UserService {
+    private Database db;
+
+    public UserService(Database db) {  // Accepts ANY database!
+        this.db = db;
+    }
+
+    public void createUser(String name, String email) {
+        Map<String, String> data = new HashMap<>();
+        data.put("name", name);
+        data.put("email", email);
+        this.db.save(data);
+    }
+
+    public void findUser(String email) {
+        this.db.find("email=" + email);
+    }
+}
+
+
+public class Main {
+    public static void main(String[] args) {
+        // Production — use MongoDB
+        UserService service = new UserService(new MongoDatabase());
+        service.createUser("Sheetal", "sheetal@gmail.com");
+
+        // Testing — use fake DB (fast, no real database needed)
+        UserService testService = new UserService(new FakeDatabase());
+        testService.createUser("Test User", "test@test.com");
+
+        // Switching databases? Change ONE line where you create UserService.
+        // UserService itself doesn't change AT ALL.
+    }
+}
 ```
 
 ---
@@ -949,14 +1121,15 @@ For each scenario, name which OOP pillar is being used:
 4. A class where you can call `get_balance()` but can't directly access `__balance`
 
 ### Exercise 2: Spot the SOLID Violations
-```python
-class ReportGenerator:
-    def fetch_data_from_database(self): ...
-    def process_data(self): ...
-    def generate_pdf(self): ...
-    def send_email_with_report(self): ...
-    def upload_to_s3(self): ...
-    def notify_slack(self): ...
+```java
+public class ReportGenerator {
+    public void fetchDataFromDatabase() { /* ... */ }
+    public void processData() { /* ... */ }
+    public void generatePdf() { /* ... */ }
+    public void sendEmailWithReport() { /* ... */ }
+    public void uploadToS3() { /* ... */ }
+    public void notifySlack() { /* ... */ }
+}
 ```
 1. Which SOLID principle does this violate? Why?
 2. How would you refactor it? Draw out the new classes.
@@ -976,24 +1149,27 @@ Requirements:
 
 ### Exercise 4: Real-World Refactoring
 This code violates MULTIPLE SOLID principles. Identify each violation and rewrite it properly:
-```python
-class OnlineStore:
-    def add_product(self, name, price): ...
-    def remove_product(self, product_id): ...
-    def calculate_total(self, cart): ...
-    def apply_discount(self, cart, discount_type):
-        if discount_type == "percentage":
-            # percentage logic
-        elif discount_type == "flat":
-            # flat discount logic
-        elif discount_type == "bogo":
-            # buy one get one logic
-    def charge_credit_card(self, amount, card_number): ...
-    def charge_upi(self, amount, upi_id): ...
-    def send_order_confirmation(self, order): ...
-    def generate_invoice(self, order): ...
-    def update_inventory(self, product_id, quantity): ...
-    def track_delivery(self, order_id): ...
+```java
+public class OnlineStore {
+    public void addProduct(String name, double price) { /* ... */ }
+    public void removeProduct(String productId) { /* ... */ }
+    public double calculateTotal(Cart cart) { /* ... */ return 0; }
+    public void applyDiscount(Cart cart, String discountType) {
+        if (discountType.equals("percentage")) {
+            // percentage logic
+        } else if (discountType.equals("flat")) {
+            // flat discount logic
+        } else if (discountType.equals("bogo")) {
+            // buy one get one logic
+        }
+    }
+    public void chargeCreditCard(double amount, String cardNumber) { /* ... */ }
+    public void chargeUpi(double amount, String upiId) { /* ... */ }
+    public void sendOrderConfirmation(Order order) { /* ... */ }
+    public void generateInvoice(Order order) { /* ... */ }
+    public void updateInventory(String productId, int quantity) { /* ... */ }
+    public void trackDelivery(String orderId) { /* ... */ }
+}
 ```
 
 Violations to find:

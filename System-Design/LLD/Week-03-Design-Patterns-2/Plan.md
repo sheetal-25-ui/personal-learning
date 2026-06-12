@@ -48,68 +48,81 @@ The ride booking system does not have a massive if-elif-else block to handle all
 
 #### What problem does it solve? (The ugly code WITHOUT the pattern)
 
-```python
-# WITHOUT Strategy — The PROBLEM
-# Imagine Flipkart's discount system
+```java
+// WITHOUT Strategy — The PROBLEM
+// Imagine Flipkart's discount system
 
-def calculate_price(original_price, discount_type, discount_value=None, cart_items=None):
-    """
-    This function handles ALL discount types with if-elif-else.
-    Every time a new discount type is added, THIS function grows.
-    """
-    if discount_type == "none":
-        return original_price
+import java.util.List;
+import java.util.Map;
 
-    elif discount_type == "percentage":
-        # Diwali Sale: 20% off
-        return original_price * (1 - discount_value / 100)
+public class DiscountCalculatorBroken {
+    /**
+     * This method handles ALL discount types with if-else.
+     * Every time a new discount type is added, THIS method grows.
+     */
+    public static double calculatePrice(double originalPrice, String discountType,
+                                        Double discountValue, List<Map<String, Object>> cartItems) {
+        if (discountType.equals("none")) {
+            return originalPrice;
 
-    elif discount_type == "flat":
-        # Coupon: Rs.500 off
-        return max(0, original_price - discount_value)
+        } else if (discountType.equals("percentage")) {
+            // Diwali Sale: 20% off
+            return originalPrice * (1 - discountValue / 100);
 
-    elif discount_type == "bogo":
-        # Buy One Get One Free
-        if cart_items and len(cart_items) >= 2:
-            cheapest = min(item['price'] for item in cart_items)
-            return original_price - cheapest
-        return original_price
+        } else if (discountType.equals("flat")) {
+            // Coupon: Rs.500 off
+            return Math.max(0, originalPrice - discountValue);
 
-    elif discount_type == "tiered":
-        # Spend more, save more:
-        #   Above 5000: 10% off
-        #   Above 10000: 15% off
-        #   Above 20000: 20% off
-        if original_price > 20000:
-            return original_price * 0.8
-        elif original_price > 10000:
-            return original_price * 0.85
-        elif original_price > 5000:
-            return original_price * 0.9
-        return original_price
+        } else if (discountType.equals("bogo")) {
+            // Buy One Get One Free
+            if (cartItems != null && cartItems.size() >= 2) {
+                double cheapest = cartItems.stream()
+                    .mapToDouble(item -> (double) item.get("price"))
+                    .min()
+                    .orElse(0);
+                return originalPrice - cheapest;
+            }
+            return originalPrice;
 
-    elif discount_type == "first_order":
-        # First order: 50% off up to Rs.150
-        discount = min(original_price * 0.5, 150)
-        return original_price - discount
+        } else if (discountType.equals("tiered")) {
+            // Spend more, save more:
+            //   Above 5000: 10% off
+            //   Above 10000: 15% off
+            //   Above 20000: 20% off
+            if (originalPrice > 20000) {
+                return originalPrice * 0.8;
+            } else if (originalPrice > 10000) {
+                return originalPrice * 0.85;
+            } else if (originalPrice > 5000) {
+                return originalPrice * 0.9;
+            }
+            return originalPrice;
 
-    elif discount_type == "bank_offer":
-        # HDFC Credit Card: 10% instant discount up to Rs.1500
-        discount = min(original_price * 0.1, 1500)
-        return original_price - discount
+        } else if (discountType.equals("first_order")) {
+            // First order: 50% off up to Rs.150
+            double discount = Math.min(originalPrice * 0.5, 150);
+            return originalPrice - discount;
 
-    # PROBLEM: This function is ALREADY 40+ lines long.
-    # Every new sale event (Republic Day Sale, Big Billion Days,
-    # Student Discount, Senior Citizen Discount, Employee Discount)
-    # adds another elif block.
-    #
-    # After a year, this function will be 200+ lines with 20+ conditions.
-    # Testing it is a nightmare — you must test ALL paths.
-    # Two developers working on different discounts will get merge conflicts.
-    # One typo in the "tiered" block could break the "bogo" block.
+        } else if (discountType.equals("bank_offer")) {
+            // HDFC Credit Card: 10% instant discount up to Rs.1500
+            double discount = Math.min(originalPrice * 0.1, 1500);
+            return originalPrice - discount;
 
-    else:
-        raise ValueError(f"Unknown discount type: {discount_type}")
+        // PROBLEM: This method is ALREADY 40+ lines long.
+        // Every new sale event (Republic Day Sale, Big Billion Days,
+        // Student Discount, Senior Citizen Discount, Employee Discount)
+        // adds another else-if block.
+        //
+        // After a year, this method will be 200+ lines with 20+ conditions.
+        // Testing it is a nightmare — you must test ALL paths.
+        // Two developers working on different discounts will get merge conflicts.
+        // One typo in the "tiered" block could break the "bogo" block.
+
+        } else {
+            throw new IllegalArgumentException("Unknown discount type: " + discountType);
+        }
+    }
+}
 ```
 
 **What goes wrong:**
@@ -120,158 +133,223 @@ def calculate_price(original_price, discount_type, discount_value=None, cart_ite
 
 #### The pattern — Clean code WITH Strategy
 
-```python
-from abc import ABC, abstractmethod
+```java
+import java.util.*;
 
-# Step 1: Define the Strategy interface (the contract)
-# Every discount strategy MUST implement calculate().
-# This ensures the rest of the code can treat ALL strategies the same way.
-class DiscountStrategy(ABC):
-    @abstractmethod
-    def calculate(self, original_price: float, **kwargs) -> float:
-        """
-        Given an original price, return the discounted price.
-        **kwargs allows each strategy to accept its own specific parameters.
-        """
-        pass
+// Step 1: Define the Strategy interface (the contract)
+// Every discount strategy MUST implement calculate().
+// This ensures the rest of the code can treat ALL strategies the same way.
+interface DiscountStrategy {
+    /**
+     * Given an original price, return the discounted price.
+     * context allows each strategy to accept its own specific parameters.
+     */
+    double calculate(double originalPrice, Map<String, Object> context);
+}
 
-# Step 2: Implement each strategy as its own class
-# Each class encapsulates ONE algorithm. It is small, focused, and testable.
+// Step 2: Implement each strategy as its own class
+// Each class encapsulates ONE algorithm. It is small, focused, and testable.
 
-class NoDiscount(DiscountStrategy):
-    """Full price — no discount applied."""
-    def calculate(self, original_price: float, **kwargs) -> float:
-        return original_price
+class NoDiscount implements DiscountStrategy {
+    /** Full price — no discount applied. */
+    @Override
+    public double calculate(double originalPrice, Map<String, Object> context) {
+        return originalPrice;
+    }
+}
 
-class PercentageDiscount(DiscountStrategy):
-    """
-    A percentage off the original price.
-    Example: Diwali Sale — 20% off everything
-    """
-    def __init__(self, percentage: float):
-        # Store the percentage when the strategy is created.
-        # This means you can have PercentageDiscount(20) for 20% off
-        # and PercentageDiscount(30) for 30% off — same class, different config.
-        self.percentage = percentage
+class PercentageDiscount implements DiscountStrategy {
+    /**
+     * A percentage off the original price.
+     * Example: Diwali Sale — 20% off everything
+     */
+    private final double percentage;
 
-    def calculate(self, original_price: float, **kwargs) -> float:
-        discount_amount = original_price * (self.percentage / 100)
-        return original_price - discount_amount
+    public PercentageDiscount(double percentage) {
+        // Store the percentage when the strategy is created.
+        // This means you can have PercentageDiscount(20) for 20% off
+        // and PercentageDiscount(30) for 30% off — same class, different config.
+        this.percentage = percentage;
+    }
 
-class FlatDiscount(DiscountStrategy):
-    """
-    A fixed amount off the price.
-    Example: Apply coupon FLAT500 — Rs.500 off
-    """
-    def __init__(self, amount: float):
-        self.amount = amount
+    @Override
+    public double calculate(double originalPrice, Map<String, Object> context) {
+        double discountAmount = originalPrice * (this.percentage / 100);
+        return originalPrice - discountAmount;
+    }
+}
 
-    def calculate(self, original_price: float, **kwargs) -> float:
-        # Ensure price does not go below zero
-        return max(0, original_price - self.amount)
+class FlatDiscount implements DiscountStrategy {
+    /**
+     * A fixed amount off the price.
+     * Example: Apply coupon FLAT500 — Rs.500 off
+     */
+    private final double amount;
 
-class BuyOneGetOneFree(DiscountStrategy):
-    """
-    Buy one get one free — deducts the cheapest item's price.
-    Example: Flipkart BOGO on fashion items
-    """
-    def calculate(self, original_price: float, **kwargs) -> float:
-        cart_items = kwargs.get('cart_items', [])
-        if cart_items and len(cart_items) >= 2:
-            cheapest = min(item['price'] for item in cart_items)
-            return original_price - cheapest
-        return original_price
+    public FlatDiscount(double amount) {
+        this.amount = amount;
+    }
 
-class TieredDiscount(DiscountStrategy):
-    """
-    Spend more, save more.
-    Example: Big Billion Days — 10% off above 5000, 15% off above 10000, 20% off above 20000
-    """
-    def __init__(self, tiers: list):
-        """
-        tiers is a list of (threshold, percentage) tuples, sorted descending.
-        Example: [(20000, 20), (10000, 15), (5000, 10)]
-        """
-        # Sort by threshold descending so we check highest first
-        self.tiers = sorted(tiers, key=lambda t: t[0], reverse=True)
+    @Override
+    public double calculate(double originalPrice, Map<String, Object> context) {
+        // Ensure price does not go below zero
+        return Math.max(0, originalPrice - this.amount);
+    }
+}
 
-    def calculate(self, original_price: float, **kwargs) -> float:
-        for threshold, percentage in self.tiers:
-            if original_price > threshold:
-                return original_price * (1 - percentage / 100)
-        return original_price  # No tier matched — no discount
+class BuyOneGetOneFree implements DiscountStrategy {
+    /**
+     * Buy one get one free — deducts the cheapest item's price.
+     * Example: Flipkart BOGO on fashion items
+     */
+    @Override
+    @SuppressWarnings("unchecked")
+    public double calculate(double originalPrice, Map<String, Object> context) {
+        List<Map<String, Object>> cartItems =
+            (List<Map<String, Object>>) context.getOrDefault("cartItems", new ArrayList<>());
+        if (cartItems != null && cartItems.size() >= 2) {
+            double cheapest = cartItems.stream()
+                .mapToDouble(item -> (double) item.get("price"))
+                .min()
+                .orElse(0);
+            return originalPrice - cheapest;
+        }
+        return originalPrice;
+    }
+}
 
-class FirstOrderDiscount(DiscountStrategy):
-    """
-    New customer discount — 50% off, capped at Rs.150.
-    Example: Swiggy's first order discount
-    """
-    def __init__(self, percentage: float = 50, max_discount: float = 150):
-        self.percentage = percentage
-        self.max_discount = max_discount
+class TieredDiscount implements DiscountStrategy {
+    /**
+     * Spend more, save more.
+     * Example: Big Billion Days — 10% off above 5000, 15% off above 10000, 20% off above 20000
+     */
+    private final List<double[]> tiers;
 
-    def calculate(self, original_price: float, **kwargs) -> float:
-        discount = min(original_price * (self.percentage / 100), self.max_discount)
-        return original_price - discount
+    public TieredDiscount(List<double[]> tiers) {
+        /**
+         * tiers is a list of {threshold, percentage} arrays, sorted descending.
+         * Example: {{20000, 20}, {10000, 15}, {5000, 10}}
+         */
+        // Sort by threshold descending so we check highest first
+        this.tiers = new ArrayList<>(tiers);
+        this.tiers.sort((a, b) -> Double.compare(b[0], a[0]));
+    }
 
-# Step 3: The Context — the class that USES a strategy
-# The PricingEngine does not know WHICH strategy it is using.
-# It just knows it HAS a strategy, and it can call calculate() on it.
-class PricingEngine:
-    def __init__(self, strategy: DiscountStrategy):
-        """Create a pricing engine with an initial strategy."""
-        self._strategy = strategy
+    @Override
+    public double calculate(double originalPrice, Map<String, Object> context) {
+        for (double[] tier : this.tiers) {
+            double threshold = tier[0];
+            double percentage = tier[1];
+            if (originalPrice > threshold) {
+                return originalPrice * (1 - percentage / 100);
+            }
+        }
+        return originalPrice; // No tier matched — no discount
+    }
+}
 
-    def set_strategy(self, strategy: DiscountStrategy):
-        """
-        Switch the strategy at RUNTIME.
-        Example: Normal hours use NoDiscount, but when a sale starts,
-        switch to PercentageDiscount(20) without restarting the app.
-        """
-        self._strategy = strategy
+class FirstOrderDiscount implements DiscountStrategy {
+    /**
+     * New customer discount — 50% off, capped at Rs.150.
+     * Example: Swiggy's first order discount
+     */
+    private final double percentage;
+    private final double maxDiscount;
 
-    def calculate_final_price(self, original_price: float, **kwargs) -> float:
-        """Delegate to whatever strategy is currently set."""
-        final = self._strategy.calculate(original_price, **kwargs)
-        return round(final, 2)
+    public FirstOrderDiscount() {
+        this(50, 150);
+    }
+
+    public FirstOrderDiscount(double percentage, double maxDiscount) {
+        this.percentage = percentage;
+        this.maxDiscount = maxDiscount;
+    }
+
+    @Override
+    public double calculate(double originalPrice, Map<String, Object> context) {
+        double discount = Math.min(originalPrice * (this.percentage / 100), this.maxDiscount);
+        return originalPrice - discount;
+    }
+}
+
+// Step 3: The Context — the class that USES a strategy
+// The PricingEngine does not know WHICH strategy it is using.
+// It just knows it HAS a strategy, and it can call calculate() on it.
+class PricingEngine {
+    private DiscountStrategy strategy;
+
+    public PricingEngine(DiscountStrategy strategy) {
+        /** Create a pricing engine with an initial strategy. */
+        this.strategy = strategy;
+    }
+
+    public void setStrategy(DiscountStrategy strategy) {
+        /**
+         * Switch the strategy at RUNTIME.
+         * Example: Normal hours use NoDiscount, but when a sale starts,
+         * switch to PercentageDiscount(20) without restarting the app.
+         */
+        this.strategy = strategy;
+    }
+
+    public double calculateFinalPrice(double originalPrice, Map<String, Object> context) {
+        /** Delegate to whatever strategy is currently set. */
+        double finalPrice = this.strategy.calculate(originalPrice, context);
+        return Math.round(finalPrice * 100.0) / 100.0;
+    }
+
+    public double calculateFinalPrice(double originalPrice) {
+        return calculateFinalPrice(originalPrice, new HashMap<>());
+    }
+}
 
 
-# Step 4: Usage — see how clean and flexible this is!
+// Step 4: Usage — see how clean and flexible this is!
 
-# Scenario 1: Regular day, no sale
-engine = PricingEngine(NoDiscount())
-print(f"Regular price: Rs.{engine.calculate_final_price(2000)}")
-# Regular price: Rs.2000
+class StrategyDemo {
+    public static void main(String[] args) {
+        // Scenario 1: Regular day, no sale
+        PricingEngine engine = new PricingEngine(new NoDiscount());
+        System.out.println("Regular price: Rs." + engine.calculateFinalPrice(2000));
+        // Regular price: Rs.2000
 
-# Scenario 2: Diwali Sale starts — just swap the strategy!
-engine.set_strategy(PercentageDiscount(20))
-print(f"Diwali sale price: Rs.{engine.calculate_final_price(2000)}")
-# Diwali sale price: Rs.1600.0
+        // Scenario 2: Diwali Sale starts — just swap the strategy!
+        engine.setStrategy(new PercentageDiscount(20));
+        System.out.println("Diwali sale price: Rs." + engine.calculateFinalPrice(2000));
+        // Diwali sale price: Rs.1600.0
 
-# Scenario 3: Customer applies a coupon
-engine.set_strategy(FlatDiscount(500))
-print(f"Coupon price: Rs.{engine.calculate_final_price(2000)}")
-# Coupon price: Rs.1500
+        // Scenario 3: Customer applies a coupon
+        engine.setStrategy(new FlatDiscount(500));
+        System.out.println("Coupon price: Rs." + engine.calculateFinalPrice(2000));
+        // Coupon price: Rs.1500
 
-# Scenario 4: Big Billion Days tiered discount
-big_billion = TieredDiscount([(20000, 20), (10000, 15), (5000, 10)])
-engine.set_strategy(big_billion)
-print(f"Rs.25000 item during BBD: Rs.{engine.calculate_final_price(25000)}")
-# Rs.25000 item during BBD: Rs.20000.0
-print(f"Rs.7000 item during BBD: Rs.{engine.calculate_final_price(7000)}")
-# Rs.7000 item during BBD: Rs.6300.0
+        // Scenario 4: Big Billion Days tiered discount
+        TieredDiscount bigBillion = new TieredDiscount(Arrays.asList(
+            new double[]{20000, 20}, new double[]{10000, 15}, new double[]{5000, 10}
+        ));
+        engine.setStrategy(bigBillion);
+        System.out.println("Rs.25000 item during BBD: Rs." + engine.calculateFinalPrice(25000));
+        // Rs.25000 item during BBD: Rs.20000.0
+        System.out.println("Rs.7000 item during BBD: Rs." + engine.calculateFinalPrice(7000));
+        // Rs.7000 item during BBD: Rs.6300.0
 
-# Scenario 5: New customer first order
-engine.set_strategy(FirstOrderDiscount())
-print(f"First order price for Rs.400: Rs.{engine.calculate_final_price(400)}")
-# First order price for Rs.400: Rs.250.0 (50% of 400 = 200, capped at 150, so 400-150=250)
+        // Scenario 5: New customer first order
+        engine.setStrategy(new FirstOrderDiscount());
+        System.out.println("First order price for Rs.400: Rs." + engine.calculateFinalPrice(400));
+        // First order price for Rs.400: Rs.250.0 (50% of 400 = 200, capped at 150, so 400-150=250)
 
-# Scenario 6: BOGO
-engine.set_strategy(BuyOneGetOneFree())
-cart = [{"name": "T-Shirt", "price": 800}, {"name": "Socks", "price": 200}]
-total = sum(item['price'] for item in cart)
-print(f"BOGO price: Rs.{engine.calculate_final_price(total, cart_items=cart)}")
-# BOGO price: Rs.800.0 (cheapest item = socks Rs.200 is free)
+        // Scenario 6: BOGO
+        engine.setStrategy(new BuyOneGetOneFree());
+        List<Map<String, Object>> cart = new ArrayList<>();
+        cart.add(Map.of("name", "T-Shirt", "price", 800.0));
+        cart.add(Map.of("name", "Socks", "price", 200.0));
+        double total = cart.stream().mapToDouble(item -> (double) item.get("price")).sum();
+        Map<String, Object> context = new HashMap<>();
+        context.put("cartItems", cart);
+        System.out.println("BOGO price: Rs." + engine.calculateFinalPrice(total, context));
+        // BOGO price: Rs.800.0 (cheapest item = socks Rs.200 is free)
+    }
+}
 ```
 
 **Why this is better:**
@@ -282,7 +360,7 @@ print(f"BOGO price: Rs.{engine.calculate_final_price(total, cart_items=cart)}")
 | Testing a specific discount | Test the entire function | Test only the one class |
 | Two devs adding different discounts | Merge conflict (same file/function) | No conflict (different files) |
 | Reading the code | Scroll through 200 lines of if-elif | Open the one 10-line class you need |
-| Runtime flexibility | Must redeploy to change discount logic | Swap strategy at runtime with set_strategy() |
+| Runtime flexibility | Must redeploy to change discount logic | Swap strategy at runtime with setStrategy() |
 
 #### When to use Strategy
 
@@ -324,257 +402,305 @@ The order management system does NOT have hardcoded calls to each of these syste
 
 #### What problem does it solve? (The ugly code WITHOUT the pattern)
 
-```python
-# WITHOUT Observer — The PROBLEM
-# The order system must KNOW about every system that cares about order events
+```java
+// WITHOUT Observer — The PROBLEM
+// The order system must KNOW about every system that cares about order events
 
-class OrderService:
-    def __init__(self):
-        # The order service must hold references to EVERY dependent system
-        self.push_notification = PushNotificationService()
-        self.email_service = EmailService()
-        self.sms_service = SMSService()
-        self.tracking_service = TrackingService()
-        self.restaurant_dashboard = RestaurantDashboard()
-        self.analytics = AnalyticsService()
-        self.eta_calculator = ETACalculator()
+class OrderServiceBroken {
+    // The order service must hold references to EVERY dependent system
+    private PushNotificationService pushNotification;
+    private EmailService emailService;
+    private SMSService smsService;
+    private TrackingService trackingService;
+    private RestaurantDashboard restaurantDashboard;
+    private AnalyticsService analytics;
+    private ETACalculator etaCalculator;
 
-    def update_order_status(self, order_id, new_status):
-        # Update the order in the database
-        print(f"Order {order_id} -> {new_status}")
+    public OrderServiceBroken() {
+        this.pushNotification = new PushNotificationService();
+        this.emailService = new EmailService();
+        this.smsService = new SMSService();
+        this.trackingService = new TrackingService();
+        this.restaurantDashboard = new RestaurantDashboard();
+        this.analytics = new AnalyticsService();
+        this.etaCalculator = new ETACalculator();
+    }
 
-        # NOW: manually call EVERY system that might care
-        if new_status == "preparing":
-            self.push_notification.send(f"Order {order_id} is being prepared")
-            self.restaurant_dashboard.update(order_id, "preparing")
-            self.analytics.log(order_id, "preparation_started")
+    public void updateOrderStatus(String orderId, String newStatus) {
+        // Update the order in the database
+        System.out.println("Order " + orderId + " -> " + newStatus);
 
-        elif new_status == "out_for_delivery":
-            self.push_notification.send(f"Rider is on the way for order {order_id}")
-            self.sms_service.send(f"Your order {order_id} is out for delivery")
-            self.tracking_service.start_tracking(order_id)
-            self.restaurant_dashboard.update(order_id, "picked_up")
-            self.analytics.log(order_id, "picked_up")
-            self.eta_calculator.recalculate(order_id)
+        // NOW: manually call EVERY system that might care
+        if (newStatus.equals("preparing")) {
+            pushNotification.send("Order " + orderId + " is being prepared");
+            restaurantDashboard.update(orderId, "preparing");
+            analytics.log(orderId, "preparation_started");
 
-        elif new_status == "delivered":
-            self.push_notification.send(f"Order {order_id} delivered!")
-            self.email_service.send_receipt(order_id)
-            self.tracking_service.stop_tracking(order_id)
-            self.restaurant_dashboard.update(order_id, "completed")
-            self.analytics.log(order_id, "delivered")
-            # OOPS! Forgot to add loyalty_service.award_points() here
-            # And forgot to add feedback_service.request_rating() here
-            # Easy to forget when you must manually add each call!
+        } else if (newStatus.equals("out_for_delivery")) {
+            pushNotification.send("Rider is on the way for order " + orderId);
+            smsService.send("Your order " + orderId + " is out for delivery");
+            trackingService.startTracking(orderId);
+            restaurantDashboard.update(orderId, "picked_up");
+            analytics.log(orderId, "picked_up");
+            etaCalculator.recalculate(orderId);
 
-# PROBLEMS:
-# 1. OrderService is tightly coupled to 7+ services
-# 2. Adding a new subscriber means MODIFYING OrderService
-# 3. Easy to forget to add a new service to every relevant status change
-# 4. Cannot dynamically subscribe/unsubscribe at runtime
-# 5. Testing OrderService requires mocking all 7 services
-# 6. If the analytics service is down, it might crash the order update!
+        } else if (newStatus.equals("delivered")) {
+            pushNotification.send("Order " + orderId + " delivered!");
+            emailService.sendReceipt(orderId);
+            trackingService.stopTracking(orderId);
+            restaurantDashboard.update(orderId, "completed");
+            analytics.log(orderId, "delivered");
+            // OOPS! Forgot to add loyaltyService.awardPoints() here
+            // And forgot to add feedbackService.requestRating() here
+            // Easy to forget when you must manually add each call!
+        }
+    }
+}
+
+// PROBLEMS:
+// 1. OrderService is tightly coupled to 7+ services
+// 2. Adding a new subscriber means MODIFYING OrderService
+// 3. Easy to forget to add a new service to every relevant status change
+// 4. Cannot dynamically subscribe/unsubscribe at runtime
+// 5. Testing OrderService requires mocking all 7 services
+// 6. If the analytics service is down, it might crash the order update!
 ```
 
 #### The pattern — Clean code WITH Observer
 
-```python
-from abc import ABC, abstractmethod
-from datetime import datetime
+```java
+import java.time.LocalDateTime;
+import java.util.*;
 
-# Step 1: Define what an "observer" looks like (the subscriber interface)
-# Any class that wants to be notified must implement this method.
-class OrderObserver(ABC):
-    @abstractmethod
-    def on_order_update(self, order_id: str, old_status: str, new_status: str, timestamp: datetime):
-        """Called when an order's status changes."""
-        pass
+// Step 1: Define what an "observer" looks like (the subscriber interface)
+// Any class that wants to be notified must implement this method.
+interface OrderObserver {
+    /** Called when an order's status changes. */
+    void onOrderUpdate(String orderId, String oldStatus, String newStatus, LocalDateTime timestamp);
+}
 
-# Step 2: Define the "subject" (the publisher) — the EventManager
-# This is the backbone of the Observer pattern. It maintains a list of
-# subscribers and notifies them when events occur.
-class OrderEventManager:
-    def __init__(self):
-        # Dictionary: event_name -> list of observers
-        # This allows different observers to subscribe to different events.
-        # Example: PushNotification subscribes to ALL events,
-        #          but TrackingService only subscribes to "out_for_delivery"
-        self._listeners = {}
+// Step 2: Define the "subject" (the publisher) — the EventManager
+// This is the backbone of the Observer pattern. It maintains a list of
+// subscribers and notifies them when events occur.
+class OrderEventManager {
+    // Map: eventName -> list of observers
+    // This allows different observers to subscribe to different events.
+    // Example: PushNotification subscribes to ALL events,
+    //          but TrackingService only subscribes to "out_for_delivery"
+    private final Map<String, List<OrderObserver>> listeners = new HashMap<>();
 
-    def subscribe(self, event: str, observer: OrderObserver):
-        """
-        Register an observer for a specific event.
-        Example: manager.subscribe("delivered", feedback_service)
-        """
-        if event not in self._listeners:
-            self._listeners[event] = []
-        if observer not in self._listeners[event]:  # prevent duplicate subscriptions
-            self._listeners[event].append(observer)
-            print(f"  [EventManager] {observer.__class__.__name__} subscribed to '{event}'")
-
-    def unsubscribe(self, event: str, observer: OrderObserver):
-        """
-        Remove an observer from a specific event.
-        Useful for: temporarily disabling a service, A/B tests, etc.
-        """
-        if event in self._listeners:
-            self._listeners[event].remove(observer)
-
-    def notify(self, event: str, order_id: str, old_status: str, new_status: str):
-        """
-        Notify ALL observers subscribed to this event.
-        The subject does NOT know who the observers are or what they do.
-        It just calls on_order_update() on each one.
-        """
-        timestamp = datetime.now()
-        listeners = self._listeners.get(event, [])
-        for listener in listeners:
-            try:
-                listener.on_order_update(order_id, old_status, new_status, timestamp)
-            except Exception as e:
-                # IMPORTANT: One failing observer should NOT crash the whole system.
-                # If analytics is down, the user should still get their notification.
-                print(f"  [EventManager] Error notifying {listener.__class__.__name__}: {e}")
-
-# Step 3: Concrete observers — each handles the event in its own way
-
-class PushNotificationObserver(OrderObserver):
-    """Sends push notifications to the customer's phone."""
-    MESSAGES = {
-        "preparing": "Your order is being prepared by the restaurant!",
-        "out_for_delivery": "Your rider is on the way! Track live on the app.",
-        "delivered": "Your order has been delivered. Enjoy your meal!",
+    public void subscribe(String event, OrderObserver observer) {
+        /**
+         * Register an observer for a specific event.
+         * Example: manager.subscribe("delivered", feedbackService)
+         */
+        listeners.computeIfAbsent(event, k -> new ArrayList<>());
+        if (!listeners.get(event).contains(observer)) { // prevent duplicate subscriptions
+            listeners.get(event).add(observer);
+            System.out.println("  [EventManager] " + observer.getClass().getSimpleName() + " subscribed to '" + event + "'");
+        }
     }
 
-    def on_order_update(self, order_id, old_status, new_status, timestamp):
-        message = self.MESSAGES.get(new_status, f"Order {order_id} status: {new_status}")
-        print(f"  [PUSH] {message}")
-
-class SMSObserver(OrderObserver):
-    """Sends SMS for critical updates (out for delivery, delivered)."""
-    def on_order_update(self, order_id, old_status, new_status, timestamp):
-        print(f"  [SMS] Order {order_id}: Status changed to {new_status}")
-
-class EmailObserver(OrderObserver):
-    """Sends email receipt when order is delivered."""
-    def on_order_update(self, order_id, old_status, new_status, timestamp):
-        print(f"  [EMAIL] Sending receipt for order {order_id}")
-
-class RestaurantDashboardObserver(OrderObserver):
-    """Updates the restaurant's kitchen display system."""
-    def on_order_update(self, order_id, old_status, new_status, timestamp):
-        print(f"  [RESTAURANT] Dashboard updated: Order {order_id} -> {new_status}")
-
-class AnalyticsObserver(OrderObserver):
-    """Records order events for analytics and reporting."""
-    def __init__(self):
-        self.events = []
-
-    def on_order_update(self, order_id, old_status, new_status, timestamp):
-        event = {
-            "order_id": order_id,
-            "from": old_status,
-            "to": new_status,
-            "timestamp": timestamp.isoformat(),
+    public void unsubscribe(String event, OrderObserver observer) {
+        /**
+         * Remove an observer from a specific event.
+         * Useful for: temporarily disabling a service, A/B tests, etc.
+         */
+        if (listeners.containsKey(event)) {
+            listeners.get(event).remove(observer);
         }
-        self.events.append(event)
-        print(f"  [ANALYTICS] Recorded: {old_status} -> {new_status} for order {order_id}")
+    }
 
-class LiveTrackingObserver(OrderObserver):
-    """Starts/stops live GPS tracking of the delivery rider."""
-    def on_order_update(self, order_id, old_status, new_status, timestamp):
-        if new_status == "out_for_delivery":
-            print(f"  [TRACKING] Started live tracking for order {order_id}")
-        elif new_status == "delivered":
-            print(f"  [TRACKING] Stopped live tracking for order {order_id}")
+    public void notify(String event, String orderId, String oldStatus, String newStatus) {
+        /**
+         * Notify ALL observers subscribed to this event.
+         * The subject does NOT know who the observers are or what they do.
+         * It just calls onOrderUpdate() on each one.
+         */
+        LocalDateTime timestamp = LocalDateTime.now();
+        List<OrderObserver> eventListeners = listeners.getOrDefault(event, new ArrayList<>());
+        for (OrderObserver listener : eventListeners) {
+            try {
+                listener.onOrderUpdate(orderId, oldStatus, newStatus, timestamp);
+            } catch (Exception e) {
+                // IMPORTANT: One failing observer should NOT crash the whole system.
+                // If analytics is down, the user should still get their notification.
+                System.out.println("  [EventManager] Error notifying " + listener.getClass().getSimpleName() + ": " + e.getMessage());
+            }
+        }
+    }
+}
 
-class LoyaltyPointsObserver(OrderObserver):
-    """Awards loyalty points when order is delivered.
-    This was added MONTHS after the original system —
-    required ZERO changes to OrderService!"""
-    def on_order_update(self, order_id, old_status, new_status, timestamp):
-        print(f"  [LOYALTY] Awarded 50 points for order {order_id}")
+// Step 3: Concrete observers — each handles the event in its own way
 
-# Step 4: The OrderService — now CLEAN and decoupled
-class OrderService:
-    def __init__(self, event_manager: OrderEventManager):
-        # The order service only knows about the event manager.
-        # It does NOT know about push notifications, SMS, analytics, etc.
-        self._event_manager = event_manager
-        self._orders = {}
+class PushNotificationObserver implements OrderObserver {
+    /** Sends push notifications to the customer's phone. */
+    private static final Map<String, String> MESSAGES = Map.of(
+        "preparing", "Your order is being prepared by the restaurant!",
+        "out_for_delivery", "Your rider is on the way! Track live on the app.",
+        "delivered", "Your order has been delivered. Enjoy your meal!"
+    );
 
-    def update_status(self, order_id: str, new_status: str):
-        old_status = self._orders.get(order_id, "placed")
-        self._orders[order_id] = new_status
-        print(f"\nOrder {order_id}: {old_status} -> {new_status}")
-        # Just publish the event — let observers handle the rest
-        self._event_manager.notify(new_status, order_id, old_status, new_status)
+    @Override
+    public void onOrderUpdate(String orderId, String oldStatus, String newStatus, LocalDateTime timestamp) {
+        String message = MESSAGES.getOrDefault(newStatus, "Order " + orderId + " status: " + newStatus);
+        System.out.println("  [PUSH] " + message);
+    }
+}
+
+class SMSObserver implements OrderObserver {
+    /** Sends SMS for critical updates (out for delivery, delivered). */
+    @Override
+    public void onOrderUpdate(String orderId, String oldStatus, String newStatus, LocalDateTime timestamp) {
+        System.out.println("  [SMS] Order " + orderId + ": Status changed to " + newStatus);
+    }
+}
+
+class EmailObserver implements OrderObserver {
+    /** Sends email receipt when order is delivered. */
+    @Override
+    public void onOrderUpdate(String orderId, String oldStatus, String newStatus, LocalDateTime timestamp) {
+        System.out.println("  [EMAIL] Sending receipt for order " + orderId);
+    }
+}
+
+class RestaurantDashboardObserver implements OrderObserver {
+    /** Updates the restaurant's kitchen display system. */
+    @Override
+    public void onOrderUpdate(String orderId, String oldStatus, String newStatus, LocalDateTime timestamp) {
+        System.out.println("  [RESTAURANT] Dashboard updated: Order " + orderId + " -> " + newStatus);
+    }
+}
+
+class AnalyticsObserver implements OrderObserver {
+    /** Records order events for analytics and reporting. */
+    private final List<Map<String, String>> events = new ArrayList<>();
+
+    @Override
+    public void onOrderUpdate(String orderId, String oldStatus, String newStatus, LocalDateTime timestamp) {
+        Map<String, String> event = new HashMap<>();
+        event.put("order_id", orderId);
+        event.put("from", oldStatus);
+        event.put("to", newStatus);
+        event.put("timestamp", timestamp.toString());
+        events.add(event);
+        System.out.println("  [ANALYTICS] Recorded: " + oldStatus + " -> " + newStatus + " for order " + orderId);
+    }
+}
+
+class LiveTrackingObserver implements OrderObserver {
+    /** Starts/stops live GPS tracking of the delivery rider. */
+    @Override
+    public void onOrderUpdate(String orderId, String oldStatus, String newStatus, LocalDateTime timestamp) {
+        if (newStatus.equals("out_for_delivery")) {
+            System.out.println("  [TRACKING] Started live tracking for order " + orderId);
+        } else if (newStatus.equals("delivered")) {
+            System.out.println("  [TRACKING] Stopped live tracking for order " + orderId);
+        }
+    }
+}
+
+class LoyaltyPointsObserver implements OrderObserver {
+    /**
+     * Awards loyalty points when order is delivered.
+     * This was added MONTHS after the original system —
+     * required ZERO changes to OrderService!
+     */
+    @Override
+    public void onOrderUpdate(String orderId, String oldStatus, String newStatus, LocalDateTime timestamp) {
+        System.out.println("  [LOYALTY] Awarded 50 points for order " + orderId);
+    }
+}
+
+// Step 4: The OrderService — now CLEAN and decoupled
+class OrderService {
+    // The order service only knows about the event manager.
+    // It does NOT know about push notifications, SMS, analytics, etc.
+    private final OrderEventManager eventManager;
+    private final Map<String, String> orders = new HashMap<>();
+
+    public OrderService(OrderEventManager eventManager) {
+        this.eventManager = eventManager;
+    }
+
+    public void updateStatus(String orderId, String newStatus) {
+        String oldStatus = orders.getOrDefault(orderId, "placed");
+        orders.put(orderId, newStatus);
+        System.out.println("\nOrder " + orderId + ": " + oldStatus + " -> " + newStatus);
+        // Just publish the event — let observers handle the rest
+        eventManager.notify(newStatus, orderId, oldStatus, newStatus);
+    }
+}
 
 
-# Step 5: Wire it all together
+// Step 5: Wire it all together
 
-# Create the event manager
-events = OrderEventManager()
+class ObserverDemo {
+    public static void main(String[] args) {
+        // Create the event manager
+        OrderEventManager events = new OrderEventManager();
 
-# Create observers
-push = PushNotificationObserver()
-sms = SMSObserver()
-email = EmailObserver()
-restaurant = RestaurantDashboardObserver()
-analytics = AnalyticsObserver()
-tracking = LiveTrackingObserver()
-loyalty = LoyaltyPointsObserver()
+        // Create observers
+        PushNotificationObserver push = new PushNotificationObserver();
+        SMSObserver sms = new SMSObserver();
+        EmailObserver email = new EmailObserver();
+        RestaurantDashboardObserver restaurant = new RestaurantDashboardObserver();
+        AnalyticsObserver analytics = new AnalyticsObserver();
+        LiveTrackingObserver tracking = new LiveTrackingObserver();
+        LoyaltyPointsObserver loyalty = new LoyaltyPointsObserver();
 
-# Subscribe each observer to the events they care about
-# (not every observer cares about every event)
-events.subscribe("preparing", push)
-events.subscribe("preparing", restaurant)
-events.subscribe("preparing", analytics)
+        // Subscribe each observer to the events they care about
+        // (not every observer cares about every event)
+        events.subscribe("preparing", push);
+        events.subscribe("preparing", restaurant);
+        events.subscribe("preparing", analytics);
 
-events.subscribe("out_for_delivery", push)
-events.subscribe("out_for_delivery", sms)
-events.subscribe("out_for_delivery", restaurant)
-events.subscribe("out_for_delivery", tracking)
-events.subscribe("out_for_delivery", analytics)
+        events.subscribe("out_for_delivery", push);
+        events.subscribe("out_for_delivery", sms);
+        events.subscribe("out_for_delivery", restaurant);
+        events.subscribe("out_for_delivery", tracking);
+        events.subscribe("out_for_delivery", analytics);
 
-events.subscribe("delivered", push)
-events.subscribe("delivered", sms)
-events.subscribe("delivered", email)
-events.subscribe("delivered", restaurant)
-events.subscribe("delivered", tracking)
-events.subscribe("delivered", analytics)
-events.subscribe("delivered", loyalty)  # Added later — no code change to OrderService!
+        events.subscribe("delivered", push);
+        events.subscribe("delivered", sms);
+        events.subscribe("delivered", email);
+        events.subscribe("delivered", restaurant);
+        events.subscribe("delivered", tracking);
+        events.subscribe("delivered", analytics);
+        events.subscribe("delivered", loyalty); // Added later — no code change to OrderService!
 
-# Create the order service
-order_service = OrderService(events)
+        // Create the order service
+        OrderService orderService = new OrderService(events);
 
-# Simulate an order going through its lifecycle:
-print("=" * 60)
-order_service.update_status("ORD-001", "preparing")
-# Order ORD-001: placed -> preparing
-#   [PUSH] Your order is being prepared by the restaurant!
-#   [RESTAURANT] Dashboard updated: Order ORD-001 -> preparing
-#   [ANALYTICS] Recorded: placed -> preparing for order ORD-001
+        // Simulate an order going through its lifecycle:
+        System.out.println("============================================================");
+        orderService.updateStatus("ORD-001", "preparing");
+        // Order ORD-001: placed -> preparing
+        //   [PUSH] Your order is being prepared by the restaurant!
+        //   [RESTAURANT] Dashboard updated: Order ORD-001 -> preparing
+        //   [ANALYTICS] Recorded: placed -> preparing for order ORD-001
 
-print("=" * 60)
-order_service.update_status("ORD-001", "out_for_delivery")
-# Order ORD-001: preparing -> out_for_delivery
-#   [PUSH] Your rider is on the way! Track live on the app.
-#   [SMS] Order ORD-001: Status changed to out_for_delivery
-#   [RESTAURANT] Dashboard updated: Order ORD-001 -> out_for_delivery
-#   [TRACKING] Started live tracking for order ORD-001
-#   [ANALYTICS] Recorded: preparing -> out_for_delivery for order ORD-001
+        System.out.println("============================================================");
+        orderService.updateStatus("ORD-001", "out_for_delivery");
+        // Order ORD-001: preparing -> out_for_delivery
+        //   [PUSH] Your rider is on the way! Track live on the app.
+        //   [SMS] Order ORD-001: Status changed to out_for_delivery
+        //   [RESTAURANT] Dashboard updated: Order ORD-001 -> out_for_delivery
+        //   [TRACKING] Started live tracking for order ORD-001
+        //   [ANALYTICS] Recorded: preparing -> out_for_delivery for order ORD-001
 
-print("=" * 60)
-order_service.update_status("ORD-001", "delivered")
-# Order ORD-001: out_for_delivery -> delivered
-#   [PUSH] Your order has been delivered. Enjoy your meal!
-#   [SMS] Order ORD-001: Status changed to delivered
-#   [EMAIL] Sending receipt for order ORD-001
-#   [RESTAURANT] Dashboard updated: Order ORD-001 -> delivered
-#   [TRACKING] Stopped live tracking for order ORD-001
-#   [ANALYTICS] Recorded: out_for_delivery -> delivered for order ORD-001
-#   [LOYALTY] Awarded 50 points for order ORD-001
+        System.out.println("============================================================");
+        orderService.updateStatus("ORD-001", "delivered");
+        // Order ORD-001: out_for_delivery -> delivered
+        //   [PUSH] Your order has been delivered. Enjoy your meal!
+        //   [SMS] Order ORD-001: Status changed to delivered
+        //   [EMAIL] Sending receipt for order ORD-001
+        //   [RESTAURANT] Dashboard updated: Order ORD-001 -> delivered
+        //   [TRACKING] Stopped live tracking for order ORD-001
+        //   [ANALYTICS] Recorded: out_for_delivery -> delivered for order ORD-001
+        //   [LOYALTY] Awarded 50 points for order ORD-001
+    }
+}
 ```
 
 **The key insight:** The `OrderService` has NO imports, NO references, and NO knowledge of push notifications, SMS, email, analytics, tracking, or loyalty points. It just publishes events. The event manager and observers handle everything else. This means:
@@ -627,246 +753,313 @@ Each action is stored as an object that knows how to DO itself and UNDO itself. 
 
 #### What problem does it solve? (The ugly code WITHOUT the pattern)
 
-```python
-# WITHOUT Command — The PROBLEM
-# A text editor where undo is implemented with manual state tracking
+```java
+// WITHOUT Command — The PROBLEM
+// A text editor where undo is implemented with manual state tracking
 
-class TextEditorBroken:
-    def __init__(self):
-        self.content = ""
-        # To support undo, you would need to save the ENTIRE content
-        # before every operation. For a 100MB document, this is insane.
-        self._snapshots = []
+import java.util.ArrayList;
+import java.util.List;
 
-    def type_text(self, text):
-        self._snapshots.append(self.content)  # Save entire state!
-        self.content += text
+class TextEditorBroken {
+    private String content = "";
+    // To support undo, you would need to save the ENTIRE content
+    // before every operation. For a 100MB document, this is insane.
+    private List<String> snapshots = new ArrayList<>();
 
-    def delete_last_n(self, n):
-        self._snapshots.append(self.content)  # Save entire state again!
-        self.content = self.content[:-n]
+    public void typeText(String text) {
+        snapshots.add(content);  // Save entire state!
+        content += text;
+    }
 
-    def replace(self, old, new):
-        self._snapshots.append(self.content)  # And again!
-        self.content = self.content.replace(old, new)
+    public void deleteLastN(int n) {
+        snapshots.add(content);  // Save entire state again!
+        content = content.substring(0, content.length() - n);
+    }
 
-    def undo(self):
-        if self._snapshots:
-            self.content = self._snapshots.pop()  # Restore ENTIRE content
+    public void replace(String oldText, String newText) {
+        snapshots.add(content);  // And again!
+        content = content.replace(oldText, newText);
+    }
 
-# PROBLEMS:
-# 1. Memory: Saving the entire document for every keystroke is extremely wasteful.
-#    A 100-page document with 10,000 edits = 10,000 full copies in memory.
-# 2. No redo: Once you undo, the forward history is lost.
-# 3. No selective undo: You cannot undo just the "replace" operation while keeping
-#    the "type" operations. It is all-or-nothing.
-# 4. No batching: You cannot group multiple operations into one "undo unit."
+    public void undo() {
+        if (!snapshots.isEmpty()) {
+            content = snapshots.remove(snapshots.size() - 1);  // Restore ENTIRE content
+        }
+    }
+}
+
+// PROBLEMS:
+// 1. Memory: Saving the entire document for every keystroke is extremely wasteful.
+//    A 100-page document with 10,000 edits = 10,000 full copies in memory.
+// 2. No redo: Once you undo, the forward history is lost.
+// 3. No selective undo: You cannot undo just the "replace" operation while keeping
+//    the "type" operations. It is all-or-nothing.
+// 4. No batching: You cannot group multiple operations into one "undo unit."
 ```
 
 #### The pattern — Clean code WITH Command
 
-```python
-from abc import ABC, abstractmethod
+```java
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Stack;
 
-# Step 1: Define the Command interface
-# Every command must know how to EXECUTE itself and UNDO itself.
-class Command(ABC):
-    @abstractmethod
-    def execute(self):
-        """Perform the action."""
-        pass
+// Step 1: Define the Command interface
+// Every command must know how to EXECUTE itself and UNDO itself.
+interface Command {
+    /** Perform the action. */
+    void execute();
 
-    @abstractmethod
-    def undo(self):
-        """Reverse the action — restore to the state before execute()."""
-        pass
+    /** Reverse the action — restore to the state before execute(). */
+    void undo();
 
-    @abstractmethod
-    def description(self) -> str:
-        """Human-readable description for the history panel."""
-        pass
+    /** Human-readable description for the history panel. */
+    String description();
+}
 
-# Step 2: Concrete commands — each knows ONE operation
+// Step 2: Concrete commands — each knows ONE operation
 
-class InsertTextCommand(Command):
-    """Inserts text at a specific position in the document."""
-    def __init__(self, editor, text: str, position: int):
-        self._editor = editor      # Reference to the editor we are modifying
-        self._text = text           # The text to insert
-        self._position = position   # Where to insert it
+class InsertTextCommand implements Command {
+    /** Inserts text at a specific position in the document. */
+    private final TextEditor editor;    // Reference to the editor we are modifying
+    private final String text;          // The text to insert
+    private final int position;         // Where to insert it
 
-    def execute(self):
-        # Insert text at the specified position
-        content = self._editor.content
-        self._editor.content = (
-            content[:self._position] + self._text + content[self._position:]
-        )
+    public InsertTextCommand(TextEditor editor, String text, int position) {
+        this.editor = editor;
+        this.text = text;
+        this.position = position;
+    }
 
-    def undo(self):
-        # Remove the text we inserted
-        # We know exactly where it was and how long it was,
-        # so we can surgically remove it (no need to save the whole document!)
-        content = self._editor.content
-        self._editor.content = (
-            content[:self._position] + content[self._position + len(self._text):]
-        )
+    @Override
+    public void execute() {
+        // Insert text at the specified position
+        String content = editor.getContent();
+        editor.setContent(
+            content.substring(0, position) + text + content.substring(position)
+        );
+    }
 
-    def description(self):
-        preview = self._text[:20] + "..." if len(self._text) > 20 else self._text
-        return f"Insert '{preview}' at position {self._position}"
+    @Override
+    public void undo() {
+        // Remove the text we inserted
+        // We know exactly where it was and how long it was,
+        // so we can surgically remove it (no need to save the whole document!)
+        String content = editor.getContent();
+        editor.setContent(
+            content.substring(0, position) + content.substring(position + text.length())
+        );
+    }
 
-class DeleteTextCommand(Command):
-    """Deletes text from a specific position."""
-    def __init__(self, editor, position: int, length: int):
-        self._editor = editor
-        self._position = position
-        self._length = length
-        self._deleted_text = ""  # We will store what was deleted (for undo)
+    @Override
+    public String description() {
+        String preview = text.length() > 20 ? text.substring(0, 20) + "..." : text;
+        return "Insert '" + preview + "' at position " + position;
+    }
+}
 
-    def execute(self):
-        content = self._editor.content
-        # Save what we are about to delete (so we can restore it on undo)
-        self._deleted_text = content[self._position:self._position + self._length]
-        # Perform the deletion
-        self._editor.content = (
-            content[:self._position] + content[self._position + self._length:]
-        )
+class DeleteTextCommand implements Command {
+    /** Deletes text from a specific position. */
+    private final TextEditor editor;
+    private final int position;
+    private final int length;
+    private String deletedText = "";  // We will store what was deleted (for undo)
 
-    def undo(self):
-        # Re-insert the deleted text at its original position
-        content = self._editor.content
-        self._editor.content = (
-            content[:self._position] + self._deleted_text + content[self._position:]
-        )
+    public DeleteTextCommand(TextEditor editor, int position, int length) {
+        this.editor = editor;
+        this.position = position;
+        this.length = length;
+    }
 
-    def description(self):
-        return f"Delete {self._length} chars at position {self._position}"
+    @Override
+    public void execute() {
+        String content = editor.getContent();
+        // Save what we are about to delete (so we can restore it on undo)
+        deletedText = content.substring(position, position + length);
+        // Perform the deletion
+        editor.setContent(
+            content.substring(0, position) + content.substring(position + length)
+        );
+    }
 
-class ReplaceTextCommand(Command):
-    """Replaces all occurrences of old_text with new_text."""
-    def __init__(self, editor, old_text: str, new_text: str):
-        self._editor = editor
-        self._old_text = old_text
-        self._new_text = new_text
-        self._original_content = ""  # Save for undo (replace is complex)
+    @Override
+    public void undo() {
+        // Re-insert the deleted text at its original position
+        String content = editor.getContent();
+        editor.setContent(
+            content.substring(0, position) + deletedText + content.substring(position)
+        );
+    }
 
-    def execute(self):
-        self._original_content = self._editor.content
-        self._editor.content = self._editor.content.replace(self._old_text, self._new_text)
+    @Override
+    public String description() {
+        return "Delete " + length + " chars at position " + position;
+    }
+}
 
-    def undo(self):
-        # For replace, we saved the original content because
-        # "find and replace" can affect multiple locations
-        self._editor.content = self._original_content
+class ReplaceTextCommand implements Command {
+    /** Replaces all occurrences of oldText with newText. */
+    private final TextEditor editor;
+    private final String oldText;
+    private final String newText;
+    private String originalContent = "";  // Save for undo (replace is complex)
 
-    def description(self):
-        return f"Replace '{self._old_text}' with '{self._new_text}'"
+    public ReplaceTextCommand(TextEditor editor, String oldText, String newText) {
+        this.editor = editor;
+        this.oldText = oldText;
+        this.newText = newText;
+    }
 
-# Step 3: The TextEditor — manages the command history
+    @Override
+    public void execute() {
+        originalContent = editor.getContent();
+        editor.setContent(editor.getContent().replace(oldText, newText));
+    }
 
-class TextEditor:
-    def __init__(self):
-        self.content = ""
-        self._history = []        # Stack of executed commands (for undo)
-        self._redo_stack = []     # Stack of undone commands (for redo)
+    @Override
+    public void undo() {
+        // For replace, we saved the original content because
+        // "find and replace" can affect multiple locations
+        editor.setContent(originalContent);
+    }
 
-    def execute_command(self, command: Command):
-        """Execute a command and add it to the history."""
-        command.execute()
-        self._history.append(command)
-        # When a new command is executed, the redo stack is cleared.
-        # (You cannot redo commands from a "different timeline.")
-        self._redo_stack.clear()
+    @Override
+    public String description() {
+        return "Replace '" + oldText + "' with '" + newText + "'";
+    }
+}
 
-    def undo(self):
-        """Undo the last command."""
-        if not self._history:
-            print("Nothing to undo!")
-            return
-        command = self._history.pop()
-        command.undo()
-        self._redo_stack.append(command)  # Move to redo stack
-        print(f"Undid: {command.description()}")
+// Step 3: The TextEditor — manages the command history
 
-    def redo(self):
-        """Redo the last undone command."""
-        if not self._redo_stack:
-            print("Nothing to redo!")
-            return
-        command = self._redo_stack.pop()
-        command.execute()
-        self._history.append(command)  # Move back to history
-        print(f"Redid: {command.description()}")
+class TextEditor {
+    private String content = "";
+    private final Stack<Command> history = new Stack<>();       // Stack of executed commands (for undo)
+    private final Stack<Command> redoStack = new Stack<>();     // Stack of undone commands (for redo)
 
-    def show_history(self):
-        """Show the edit history (like Photoshop's History panel)."""
-        print("\n--- Edit History ---")
-        for i, cmd in enumerate(self._history, 1):
-            print(f"  {i}. {cmd.description()}")
-        if not self._history:
-            print("  (empty)")
-        print("---")
+    public String getContent() {
+        return content;
+    }
 
-    # Convenience methods that create and execute commands:
-    def type_text(self, text: str):
-        """Type text at the end of the document."""
-        cmd = InsertTextCommand(self, text, len(self.content))
-        self.execute_command(cmd)
+    public void setContent(String content) {
+        this.content = content;
+    }
 
-    def insert_at(self, text: str, position: int):
-        """Insert text at a specific position."""
-        cmd = InsertTextCommand(self, text, position)
-        self.execute_command(cmd)
+    public void executeCommand(Command command) {
+        /** Execute a command and add it to the history. */
+        command.execute();
+        history.push(command);
+        // When a new command is executed, the redo stack is cleared.
+        // (You cannot redo commands from a "different timeline.")
+        redoStack.clear();
+    }
 
-    def delete(self, position: int, length: int):
-        """Delete text at a specific position."""
-        cmd = DeleteTextCommand(self, position, length)
-        self.execute_command(cmd)
+    public void undo() {
+        /** Undo the last command. */
+        if (history.isEmpty()) {
+            System.out.println("Nothing to undo!");
+            return;
+        }
+        Command command = history.pop();
+        command.undo();
+        redoStack.push(command);  // Move to redo stack
+        System.out.println("Undid: " + command.description());
+    }
 
-    def replace(self, old_text: str, new_text: str):
-        """Replace all occurrences of old_text with new_text."""
-        cmd = ReplaceTextCommand(self, old_text, new_text)
-        self.execute_command(cmd)
+    public void redo() {
+        /** Redo the last undone command. */
+        if (redoStack.isEmpty()) {
+            System.out.println("Nothing to redo!");
+            return;
+        }
+        Command command = redoStack.pop();
+        command.execute();
+        history.push(command);  // Move back to history
+        System.out.println("Redid: " + command.description());
+    }
+
+    public void showHistory() {
+        /** Show the edit history (like Photoshop's History panel). */
+        System.out.println("\n--- Edit History ---");
+        int i = 1;
+        for (Command cmd : history) {
+            System.out.println("  " + i + ". " + cmd.description());
+            i++;
+        }
+        if (history.isEmpty()) {
+            System.out.println("  (empty)");
+        }
+        System.out.println("---");
+    }
+
+    // Convenience methods that create and execute commands:
+    public void typeText(String text) {
+        /** Type text at the end of the document. */
+        Command cmd = new InsertTextCommand(this, text, content.length());
+        executeCommand(cmd);
+    }
+
+    public void insertAt(String text, int position) {
+        /** Insert text at a specific position. */
+        Command cmd = new InsertTextCommand(this, text, position);
+        executeCommand(cmd);
+    }
+
+    public void delete(int position, int length) {
+        /** Delete text at a specific position. */
+        Command cmd = new DeleteTextCommand(this, position, length);
+        executeCommand(cmd);
+    }
+
+    public void replace(String oldText, String newText) {
+        /** Replace all occurrences of oldText with newText. */
+        Command cmd = new ReplaceTextCommand(this, oldText, newText);
+        executeCommand(cmd);
+    }
+}
 
 
-# Step 4: Usage — see the full undo/redo in action
+// Step 4: Usage — see the full undo/redo in action
 
-editor = TextEditor()
+class CommandDemo {
+    public static void main(String[] args) {
+        TextEditor editor = new TextEditor();
 
-# Type some text
-editor.type_text("Hello World")
-print(f'Content: "{editor.content}"')      # "Hello World"
+        // Type some text
+        editor.typeText("Hello World");
+        System.out.println("Content: \"" + editor.getContent() + "\"");      // "Hello World"
 
-# Type more
-editor.type_text("! Welcome to India")
-print(f'Content: "{editor.content}"')      # "Hello World! Welcome to India"
+        // Type more
+        editor.typeText("! Welcome to India");
+        System.out.println("Content: \"" + editor.getContent() + "\"");      // "Hello World! Welcome to India"
 
-# Replace a word
-editor.replace("World", "Sheetal")
-print(f'Content: "{editor.content}"')      # "Hello Sheetal! Welcome to India"
+        // Replace a word
+        editor.replace("World", "Sheetal");
+        System.out.println("Content: \"" + editor.getContent() + "\"");      // "Hello Sheetal! Welcome to India"
 
-# Show history
-editor.show_history()
-# --- Edit History ---
-#   1. Insert 'Hello World' at position 0
-#   2. Insert '! Welcome to India' at position 11
-#   3. Replace 'World' with 'Sheetal'
-# ---
+        // Show history
+        editor.showHistory();
+        // --- Edit History ---
+        //   1. Insert 'Hello World' at position 0
+        //   2. Insert '! Welcome to India' at position 11
+        //   3. Replace 'World' with 'Sheetal'
+        // ---
 
-# Undo the replace
-editor.undo()
-print(f'Content: "{editor.content}"')      # "Hello World! Welcome to India"
-# Undid: Replace 'World' with 'Sheetal'
+        // Undo the replace
+        editor.undo();
+        System.out.println("Content: \"" + editor.getContent() + "\"");      // "Hello World! Welcome to India"
+        // Undid: Replace 'World' with 'Sheetal'
 
-# Undo the second insert
-editor.undo()
-print(f'Content: "{editor.content}"')      # "Hello World"
-# Undid: Insert '! Welcome to India' at position 11
+        // Undo the second insert
+        editor.undo();
+        System.out.println("Content: \"" + editor.getContent() + "\"");      // "Hello World"
+        // Undid: Insert '! Welcome to India' at position 11
 
-# Redo!
-editor.redo()
-print(f'Content: "{editor.content}"')      # "Hello World! Welcome to India"
-# Redid: Insert '! Welcome to India' at position 11
+        // Redo!
+        editor.redo();
+        System.out.println("Content: \"" + editor.getContent() + "\"");      // "Hello World! Welcome to India"
+        // Redid: Insert '! Welcome to India' at position 11
+    }
+}
 ```
 
 **Memory comparison:**
@@ -940,278 +1133,348 @@ Notice how "Cancel" does something different in EVERY state. Without the State p
 
 #### What problem does it solve? (The ugly code WITHOUT the pattern)
 
-```python
-# WITHOUT State — The PROBLEM
-# A vending machine with state-dependent behavior
+```java
+// WITHOUT State — The PROBLEM
+// A vending machine with state-dependent behavior
 
-class VendingMachineBroken:
-    def __init__(self):
-        self.state = "idle"  # States: idle, has_coin, dispensing, out_of_stock
-        self.stock = {"chips": 5, "cola": 3, "water": 10}
-        self.inserted_amount = 0
+import java.util.HashMap;
+import java.util.Map;
 
-    def insert_coin(self, amount):
-        # Every method must check the state with if-elif
-        if self.state == "idle":
-            self.inserted_amount = amount
-            self.state = "has_coin"
-            print(f"Rs.{amount} inserted")
-        elif self.state == "has_coin":
-            self.inserted_amount += amount
-            print(f"Rs.{amount} more inserted. Total: Rs.{self.inserted_amount}")
-        elif self.state == "dispensing":
-            print("Please wait, dispensing in progress")
-        elif self.state == "out_of_stock":
-            print("Machine is out of stock. Returning your money.")
-            # return coins
+class VendingMachineBroken {
+    private String state = "idle"; // States: idle, has_coin, dispensing, out_of_stock
+    private Map<String, Integer> stock = new HashMap<>(Map.of("chips", 5, "cola", 3, "water", 10));
+    private int insertedAmount = 0;
 
-    def select_item(self, item):
-        # SAME if-elif pattern for EVERY method!
-        if self.state == "idle":
-            print("Please insert a coin first")
-        elif self.state == "has_coin":
-            if item not in self.stock or self.stock[item] <= 0:
-                print(f"{item} is out of stock")
-                return
-            price = {"chips": 20, "cola": 30, "water": 10}[item]
-            if self.inserted_amount >= price:
-                self.state = "dispensing"
-                self.stock[item] -= 1
-                change = self.inserted_amount - price
-                print(f"Dispensing {item}...")
-                if change > 0:
-                    print(f"Returning change: Rs.{change}")
-                self.inserted_amount = 0
-                self.state = "idle"
-            else:
-                print(f"Insufficient amount. {item} costs Rs.{price}, you inserted Rs.{self.inserted_amount}")
-        elif self.state == "dispensing":
-            print("Please wait, dispensing in progress")
-        elif self.state == "out_of_stock":
-            print("Machine is out of stock")
+    public void insertCoin(int amount) {
+        // Every method must check the state with if-else
+        if (state.equals("idle")) {
+            insertedAmount = amount;
+            state = "has_coin";
+            System.out.println("Rs." + amount + " inserted");
+        } else if (state.equals("has_coin")) {
+            insertedAmount += amount;
+            System.out.println("Rs." + amount + " more inserted. Total: Rs." + insertedAmount);
+        } else if (state.equals("dispensing")) {
+            System.out.println("Please wait, dispensing in progress");
+        } else if (state.equals("out_of_stock")) {
+            System.out.println("Machine is out of stock. Returning your money.");
+            // return coins
+        }
+    }
 
-    def cancel(self):
-        # AGAIN — same if-elif!
-        if self.state == "idle":
-            print("Nothing to cancel")
-        elif self.state == "has_coin":
-            print(f"Returning Rs.{self.inserted_amount}")
-            self.inserted_amount = 0
-            self.state = "idle"
-        elif self.state == "dispensing":
-            print("Cannot cancel — dispensing in progress")
-        elif self.state == "out_of_stock":
-            print("Nothing to cancel")
+    public void selectItem(String item) {
+        // SAME if-else pattern for EVERY method!
+        if (state.equals("idle")) {
+            System.out.println("Please insert a coin first");
+        } else if (state.equals("has_coin")) {
+            if (!stock.containsKey(item) || stock.get(item) <= 0) {
+                System.out.println(item + " is out of stock");
+                return;
+            }
+            Map<String, Integer> prices = Map.of("chips", 20, "cola", 30, "water", 10);
+            int price = prices.get(item);
+            if (insertedAmount >= price) {
+                state = "dispensing";
+                stock.put(item, stock.get(item) - 1);
+                int change = insertedAmount - price;
+                System.out.println("Dispensing " + item + "...");
+                if (change > 0) {
+                    System.out.println("Returning change: Rs." + change);
+                }
+                insertedAmount = 0;
+                state = "idle";
+            } else {
+                System.out.println("Insufficient amount. " + item + " costs Rs." + price + ", you inserted Rs." + insertedAmount);
+            }
+        } else if (state.equals("dispensing")) {
+            System.out.println("Please wait, dispensing in progress");
+        } else if (state.equals("out_of_stock")) {
+            System.out.println("Machine is out of stock");
+        }
+    }
 
-# PROBLEMS:
-# 1. Every method has the SAME if-elif-else block checking self.state
-# 2. Adding a new state (e.g., "maintenance") requires modifying EVERY method
-# 3. It is easy to forget to handle a state in a new method
-# 4. The logic for each state is SCATTERED across all methods instead of being in one place
-# 5. As states and actions grow, this becomes a massive matrix of conditions
+    public void cancel() {
+        // AGAIN — same if-else!
+        if (state.equals("idle")) {
+            System.out.println("Nothing to cancel");
+        } else if (state.equals("has_coin")) {
+            System.out.println("Returning Rs." + insertedAmount);
+            insertedAmount = 0;
+            state = "idle";
+        } else if (state.equals("dispensing")) {
+            System.out.println("Cannot cancel — dispensing in progress");
+        } else if (state.equals("out_of_stock")) {
+            System.out.println("Nothing to cancel");
+        }
+    }
+}
+
+// PROBLEMS:
+// 1. Every method has the SAME if-else block checking this.state
+// 2. Adding a new state (e.g., "maintenance") requires modifying EVERY method
+// 3. It is easy to forget to handle a state in a new method
+// 4. The logic for each state is SCATTERED across all methods instead of being in one place
+// 5. As states and actions grow, this becomes a massive matrix of conditions
 ```
 
 #### The pattern — Clean code WITH State
 
-```python
-from abc import ABC, abstractmethod
+```java
+import java.util.HashMap;
+import java.util.Map;
 
-# Step 1: Define the State interface
-# Every state class must implement all possible actions.
-# This ensures that when you add a new state, the type checker forces you
-# to handle every action — no forgotten cases.
-class VendingMachineState(ABC):
-    @abstractmethod
-    def insert_coin(self, machine, amount: int):
-        pass
+// Step 1: Define the State interface
+// Every state class must implement all possible actions.
+// This ensures that when you add a new state, the compiler forces you
+// to handle every action — no forgotten cases.
+interface VendingMachineState {
+    void insertCoin(VendingMachine machine, int amount);
+    void selectItem(VendingMachine machine, String item);
+    void cancel(VendingMachine machine);
+    String stateName();
+}
 
-    @abstractmethod
-    def select_item(self, machine, item: str):
-        pass
+// Step 2: Implement each state as its own class
+// ALL logic for a given state lives in ONE class.
+// Reading the code, you can see exactly what happens in each state.
 
-    @abstractmethod
-    def cancel(self, machine):
-        pass
+class IdleState implements VendingMachineState {
+    /** Machine is waiting for a customer. No coins inserted. */
 
-    @abstractmethod
-    def state_name(self) -> str:
-        pass
+    @Override
+    public void insertCoin(VendingMachine machine, int amount) {
+        machine.setInsertedAmount(amount);
+        System.out.println("Rs." + amount + " inserted. Select an item.");
+        // Transition to the next state
+        machine.setState(new HasCoinState());
+    }
 
-# Step 2: Implement each state as its own class
-# ALL logic for a given state lives in ONE class.
-# Reading the code, you can see exactly what happens in each state.
+    @Override
+    public void selectItem(VendingMachine machine, String item) {
+        System.out.println("Please insert a coin first!");
+    }
 
-class IdleState(VendingMachineState):
-    """Machine is waiting for a customer. No coins inserted."""
+    @Override
+    public void cancel(VendingMachine machine) {
+        System.out.println("Nothing to cancel — machine is idle.");
+    }
 
-    def insert_coin(self, machine, amount):
-        machine.inserted_amount = amount
-        print(f"Rs.{amount} inserted. Select an item.")
-        # Transition to the next state
-        machine.set_state(HasCoinState())
+    @Override
+    public String stateName() {
+        return "IDLE";
+    }
+}
 
-    def select_item(self, machine, item):
-        print("Please insert a coin first!")
+class HasCoinState implements VendingMachineState {
+    /** Customer has inserted a coin. Waiting for item selection. */
 
-    def cancel(self, machine):
-        print("Nothing to cancel — machine is idle.")
+    @Override
+    public void insertCoin(VendingMachine machine, int amount) {
+        machine.setInsertedAmount(machine.getInsertedAmount() + amount);
+        System.out.println("Rs." + amount + " more inserted. Total: Rs." + machine.getInsertedAmount());
+    }
 
-    def state_name(self):
-        return "IDLE"
+    @Override
+    public void selectItem(VendingMachine machine, String item) {
+        Map<String, Integer> prices = Map.of("chips", 20, "cola", 30, "water", 10);
 
-class HasCoinState(VendingMachineState):
-    """Customer has inserted a coin. Waiting for item selection."""
+        if (!prices.containsKey(item)) {
+            System.out.println("Unknown item: " + item);
+            return;
+        }
 
-    def insert_coin(self, machine, amount):
-        machine.inserted_amount += amount
-        print(f"Rs.{amount} more inserted. Total: Rs.{machine.inserted_amount}")
+        if (machine.getStock().getOrDefault(item, 0) <= 0) {
+            System.out.println(item + " is out of stock! Choose something else.");
+            return;
+        }
 
-    def select_item(self, machine, item):
-        prices = {"chips": 20, "cola": 30, "water": 10}
+        int price = prices.get(item);
+        if (machine.getInsertedAmount() < price) {
+            System.out.println(item + " costs Rs." + price + ", you have Rs." + machine.getInsertedAmount() + ". Insert Rs." + (price - machine.getInsertedAmount()) + " more.");
+            return;
+        }
 
-        if item not in prices:
-            print(f"Unknown item: {item}")
-            return
+        // Enough money — start dispensing!
+        DispensingState dispensingState = new DispensingState(item, price);
+        machine.setState(dispensingState);
+        // Trigger dispensing immediately
+        dispensingState.dispense(machine);
+    }
 
-        if machine.stock.get(item, 0) <= 0:
-            print(f"{item} is out of stock! Choose something else.")
-            return
+    @Override
+    public void cancel(VendingMachine machine) {
+        System.out.println("Transaction cancelled. Returning Rs." + machine.getInsertedAmount());
+        machine.setInsertedAmount(0);
+        machine.setState(new IdleState());
+    }
 
-        price = prices[item]
-        if machine.inserted_amount < price:
-            print(f"{item} costs Rs.{price}, you have Rs.{machine.inserted_amount}. Insert Rs.{price - machine.inserted_amount} more.")
-            return
+    @Override
+    public String stateName() {
+        return "HAS_COIN";
+    }
+}
 
-        # Enough money — start dispensing!
-        machine.set_state(DispensingState(item, price))
-        # Trigger dispensing immediately
-        machine.state.dispense(machine)
+class DispensingState implements VendingMachineState {
+    /** Machine is dispensing an item. No actions allowed during this. */
+    private final String item;
+    private final int price;
 
-    def cancel(self, machine):
-        print(f"Transaction cancelled. Returning Rs.{machine.inserted_amount}")
-        machine.inserted_amount = 0
-        machine.set_state(IdleState())
+    public DispensingState() {
+        this("", 0);
+    }
 
-    def state_name(self):
-        return "HAS_COIN"
+    public DispensingState(String item, int price) {
+        this.item = item;
+        this.price = price;
+    }
 
-class DispensingState(VendingMachineState):
-    """Machine is dispensing an item. No actions allowed during this."""
+    public void dispense(VendingMachine machine) {
+        /** Actually dispense the item. Called internally, not by the user. */
+        // Deduct stock
+        machine.getStock().put(item, machine.getStock().get(item) - 1);
+        int change = machine.getInsertedAmount() - price;
+        System.out.println("Dispensing " + item + "...");
+        if (change > 0) {
+            System.out.println("Returning change: Rs." + change);
+        }
+        System.out.println("Enjoy your " + item + "!");
+        machine.setInsertedAmount(0);
 
-    def __init__(self, item: str = "", price: int = 0):
-        self._item = item
-        self._price = price
+        // Check if machine has ANY stock left
+        boolean allEmpty = machine.getStock().values().stream().allMatch(qty -> qty <= 0);
+        if (allEmpty) {
+            machine.setState(new OutOfStockState());
+        } else {
+            machine.setState(new IdleState());
+        }
+    }
 
-    def dispense(self, machine):
-        """Actually dispense the item. Called internally, not by the user."""
-        # Deduct stock
-        machine.stock[self._item] -= 1
-        change = machine.inserted_amount - self._price
-        print(f"Dispensing {self._item}...")
-        if change > 0:
-            print(f"Returning change: Rs.{change}")
-        print(f"Enjoy your {self._item}!")
-        machine.inserted_amount = 0
+    @Override
+    public void insertCoin(VendingMachine machine, int amount) {
+        System.out.println("Please wait — dispensing in progress.");
+    }
 
-        # Check if machine has ANY stock left
-        if all(qty <= 0 for qty in machine.stock.values()):
-            machine.set_state(OutOfStockState())
-        else:
-            machine.set_state(IdleState())
+    @Override
+    public void selectItem(VendingMachine machine, String item) {
+        System.out.println("Please wait — dispensing in progress.");
+    }
 
-    def insert_coin(self, machine, amount):
-        print("Please wait — dispensing in progress.")
+    @Override
+    public void cancel(VendingMachine machine) {
+        System.out.println("Cannot cancel — dispensing in progress.");
+    }
 
-    def select_item(self, machine, item):
-        print("Please wait — dispensing in progress.")
+    @Override
+    public String stateName() {
+        return "DISPENSING";
+    }
+}
 
-    def cancel(self, machine):
-        print("Cannot cancel — dispensing in progress.")
+class OutOfStockState implements VendingMachineState {
+    /** Machine has no items left. Only a refill can fix this. */
 
-    def state_name(self):
-        return "DISPENSING"
+    @Override
+    public void insertCoin(VendingMachine machine, int amount) {
+        System.out.println("Sorry, machine is completely out of stock. Returning your Rs." + amount + ".");
+    }
 
-class OutOfStockState(VendingMachineState):
-    """Machine has no items left. Only a refill can fix this."""
+    @Override
+    public void selectItem(VendingMachine machine, String item) {
+        System.out.println("Machine is out of stock. Please try another machine.");
+    }
 
-    def insert_coin(self, machine, amount):
-        print("Sorry, machine is completely out of stock. Returning your Rs.{amount}.")
+    @Override
+    public void cancel(VendingMachine machine) {
+        if (machine.getInsertedAmount() > 0) {
+            System.out.println("Returning Rs." + machine.getInsertedAmount());
+            machine.setInsertedAmount(0);
+        }
+    }
 
-    def select_item(self, machine, item):
-        print("Machine is out of stock. Please try another machine.")
+    @Override
+    public String stateName() {
+        return "OUT_OF_STOCK";
+    }
+}
 
-    def cancel(self, machine):
-        if machine.inserted_amount > 0:
-            print(f"Returning Rs.{machine.inserted_amount}")
-            machine.inserted_amount = 0
+// Step 3: The VendingMachine context
+// It delegates ALL behavior to its current state object.
+class VendingMachine {
+    private Map<String, Integer> stock = new HashMap<>(Map.of("chips", 2, "cola", 1, "water", 3));
+    private int insertedAmount = 0;
+    private VendingMachineState state = new IdleState();
 
-    def state_name(self):
-        return "OUT_OF_STOCK"
+    public Map<String, Integer> getStock() { return stock; }
+    public int getInsertedAmount() { return insertedAmount; }
+    public void setInsertedAmount(int amount) { this.insertedAmount = amount; }
+    public VendingMachineState getState() { return state; }
 
-# Step 3: The VendingMachine context
-# It delegates ALL behavior to its current state object.
-class VendingMachine:
-    def __init__(self):
-        self.stock = {"chips": 2, "cola": 1, "water": 3}
-        self.inserted_amount = 0
-        self.state = IdleState()
+    public void setState(VendingMachineState state) {
+        /** Transition to a new state. */
+        String oldName = this.state.stateName();
+        this.state = state;
+        System.out.println("  [State: " + oldName + " -> " + state.stateName() + "]");
+    }
 
-    def set_state(self, state: VendingMachineState):
-        """Transition to a new state."""
-        old_name = self.state.state_name()
-        self.state = state
-        print(f"  [State: {old_name} -> {state.state_name()}]")
+    public void insertCoin(int amount) {
+        state.insertCoin(this, amount);
+    }
 
-    def insert_coin(self, amount):
-        self.state.insert_coin(self, amount)
+    public void selectItem(String item) {
+        state.selectItem(this, item);
+    }
 
-    def select_item(self, item):
-        self.state.select_item(self, item)
+    public void cancel() {
+        state.cancel(this);
+    }
 
-    def cancel(self):
-        self.state.cancel(self)
-
-    def show_status(self):
-        print(f"\nMachine Status: {self.state.state_name()}")
-        print(f"Inserted: Rs.{self.inserted_amount}")
-        print(f"Stock: {self.stock}")
+    public void showStatus() {
+        System.out.println("\nMachine Status: " + state.stateName());
+        System.out.println("Inserted: Rs." + insertedAmount);
+        System.out.println("Stock: " + stock);
+    }
+}
 
 
-# Step 4: Usage — see how the machine's behavior changes with state
+// Step 4: Usage — see how the machine's behavior changes with state
 
-vm = VendingMachine()
-vm.show_status()
+class StateDemo {
+    public static void main(String[] args) {
+        VendingMachine vm = new VendingMachine();
+        vm.showStatus();
 
-# Try selecting without inserting coin
-vm.select_item("chips")
-# "Please insert a coin first!"
+        // Try selecting without inserting coin
+        vm.selectItem("chips");
+        // "Please insert a coin first!"
 
-# Insert a coin
-vm.insert_coin(10)
-# "Rs.10 inserted. Select an item."
-# [State: IDLE -> HAS_COIN]
+        // Insert a coin
+        vm.insertCoin(10);
+        // "Rs.10 inserted. Select an item."
+        // [State: IDLE -> HAS_COIN]
 
-# Try to buy chips (costs 20, only have 10)
-vm.select_item("chips")
-# "chips costs Rs.20, you have Rs.10. Insert Rs.10 more."
+        // Try to buy chips (costs 20, only have 10)
+        vm.selectItem("chips");
+        // "chips costs Rs.20, you have Rs.10. Insert Rs.10 more."
 
-# Insert more
-vm.insert_coin(20)
-# "Rs.20 more inserted. Total: Rs.30"
+        // Insert more
+        vm.insertCoin(20);
+        // "Rs.20 more inserted. Total: Rs.30"
 
-# Now buy chips
-vm.select_item("chips")
-# [State: HAS_COIN -> DISPENSING]
-# "Dispensing chips..."
-# "Returning change: Rs.10"
-# "Enjoy your chips!"
-# [State: DISPENSING -> IDLE]
+        // Now buy chips
+        vm.selectItem("chips");
+        // [State: HAS_COIN -> DISPENSING]
+        // "Dispensing chips..."
+        // "Returning change: Rs.10"
+        // "Enjoy your chips!"
+        // [State: DISPENSING -> IDLE]
 
-# Cancel flow
-vm.insert_coin(50)
-vm.cancel()
-# "Transaction cancelled. Returning Rs.50"
-# [State: HAS_COIN -> IDLE]
+        // Cancel flow
+        vm.insertCoin(50);
+        vm.cancel();
+        // "Transaction cancelled. Returning Rs.50"
+        // [State: HAS_COIN -> IDLE]
+    }
+}
 ```
 
 **Before vs. After:**
@@ -1220,8 +1483,8 @@ vm.cancel()
 |---|---|
 | All state logic scattered across every method | All logic for a state is in ONE class |
 | Adding new state = modify every method | Adding new state = create one new class |
-| Easy to forget a state in a method | Abstract base class FORCES you to implement all actions |
-| State transitions hidden in assignments (`self.state = "x"`) | State transitions are explicit (`set_state(NewState())`) |
+| Easy to forget a state in a method | Interface FORCES you to implement all actions |
+| State transitions hidden in assignments (`this.state = "x"`) | State transitions are explicit (`setState(new NewState())`) |
 
 #### When to use State
 
@@ -1297,34 +1560,34 @@ OrderFacade (FACADE — hides complexity of 7 subsystems)
 A complete pricing system using the Strategy pattern. This is almost exactly what you might be asked in a Microsoft interview: "Design a discount system for an e-commerce platform."
 
 **Requirements:**
-1. Create a `DiscountStrategy` base class with a `calculate(original_price, **kwargs)` method
+1. Create a `DiscountStrategy` base class with a `calculate(originalPrice, context)` method
 2. Implement these concrete strategies:
    - `NoDiscount` — returns full price
    - `PercentageDiscount(percentage)` — e.g., 20% off
    - `FlatDiscount(amount)` — e.g., Rs.500 off (cannot go below 0)
-   - `BuyOneGetOneFree(cart_items)` — cheapest item free
-   - `CappedPercentageDiscount(percentage, max_discount)` — e.g., 50% off up to Rs.150 (like Swiggy's first order)
+   - `BuyOneGetOneFree(cartItems)` — cheapest item free
+   - `CappedPercentageDiscount(percentage, maxDiscount)` — e.g., 50% off up to Rs.150 (like Swiggy's first order)
 3. Create a `ShoppingCart` class that:
-   - Holds items (list of dicts with name and price)
-   - Has a `set_discount(strategy)` method to change the strategy
+   - Holds items (list of maps with name and price)
+   - Has a `setDiscount(strategy)` method to change the strategy
    - Has a `checkout()` method that calculates and displays the final price
 4. Demonstrate switching strategies at runtime (simulating a sale starting)
 
 **Test your solution:**
-```python
-cart = ShoppingCart()
-cart.add_item("Laptop", 55000)
-cart.add_item("Mouse", 500)
-cart.add_item("Keyboard", 1500)
+```java
+ShoppingCart cart = new ShoppingCart();
+cart.addItem("Laptop", 55000);
+cart.addItem("Mouse", 500);
+cart.addItem("Keyboard", 1500);
 
-cart.set_discount(NoDiscount())
-print(cart.checkout())  # Rs.57000
+cart.setDiscount(new NoDiscount());
+System.out.println(cart.checkout());  // Rs.57000
 
-cart.set_discount(PercentageDiscount(10))
-print(cart.checkout())  # Rs.51300
+cart.setDiscount(new PercentageDiscount(10));
+System.out.println(cart.checkout());  // Rs.51300
 
-cart.set_discount(CappedPercentageDiscount(50, 2000))
-print(cart.checkout())  # Rs.55000 (50% of 57000 = 28500, capped at 2000, so 57000-2000)
+cart.setDiscount(new CappedPercentageDiscount(50, 2000));
+System.out.println(cart.checkout());  // Rs.55000 (50% of 57000 = 28500, capped at 2000, so 57000-2000)
 ```
 
 ---
@@ -1336,7 +1599,7 @@ A stock price monitoring system where multiple subscribers react when stock pric
 
 **Requirements:**
 1. Create a `StockExchange` class (the subject/publisher) that:
-   - Maintains current prices for stocks (dict of stock_name -> price)
+   - Maintains current prices for stocks (map of stockName -> price)
    - Has `subscribe(stock, observer)` and `unsubscribe(stock, observer)` methods
    - When a stock price changes, notifies all observers subscribed to that stock
 2. Create these observer classes:
@@ -1344,28 +1607,28 @@ A stock price monitoring system where multiple subscribers react when stock pric
    - `WebDashboard` — updates a dashboard display with price and percentage change
    - `EmailDigest` — accumulates changes and shows a summary
    - `PortfolioCalculator` — recalculates total portfolio value based on holdings
-3. The `PortfolioCalculator` should accept a dict of holdings (e.g., `{"TCS": 10, "INFY": 5}`) and recalculate total value whenever a held stock's price changes
+3. The `PortfolioCalculator` should accept a map of holdings (e.g., `{"TCS": 10, "INFY": 5}`) and recalculate total value whenever a held stock's price changes
 
 **Test your solution:**
-```python
-exchange = StockExchange()
-exchange.set_price("TCS", 3500)
-exchange.set_price("INFY", 1800)
-exchange.set_price("RELIANCE", 2500)
+```java
+StockExchange exchange = new StockExchange();
+exchange.setPrice("TCS", 3500);
+exchange.setPrice("INFY", 1800);
+exchange.setPrice("RELIANCE", 2500);
 
-mobile = MobileAppAlert()
-portfolio = PortfolioCalculator({"TCS": 10, "INFY": 5})
+MobileAppAlert mobile = new MobileAppAlert();
+PortfolioCalculator portfolio = new PortfolioCalculator(Map.of("TCS", 10, "INFY", 5));
 
-exchange.subscribe("TCS", mobile)
-exchange.subscribe("TCS", portfolio)
-exchange.subscribe("INFY", portfolio)
+exchange.subscribe("TCS", mobile);
+exchange.subscribe("TCS", portfolio);
+exchange.subscribe("INFY", portfolio);
 
-exchange.update_price("TCS", 3600)
-# MobileAppAlert: TCS price changed to Rs.3600
-# PortfolioCalculator: Portfolio value = Rs.45000 (TCS:10*3600 + INFY:5*1800)
+exchange.updatePrice("TCS", 3600);
+// MobileAppAlert: TCS price changed to Rs.3600
+// PortfolioCalculator: Portfolio value = Rs.45000 (TCS:10*3600 + INFY:5*1800)
 
-exchange.update_price("INFY", 1750)
-# PortfolioCalculator: Portfolio value = Rs.44750 (TCS:10*3600 + INFY:5*1750)
+exchange.updatePrice("INFY", 1750);
+// PortfolioCalculator: Portfolio value = Rs.44750 (TCS:10*3600 + INFY:5*1750)
 ```
 
 ---
@@ -1377,23 +1640,23 @@ Extend the Command pattern text editor to support these additional features:
 
 1. **Bold formatting command** — wraps selected text in `**` markers (for Markdown bold)
 2. **Batch commands** — group multiple commands into one undo unit (e.g., "Find and Replace All" is one undo action even though it makes 5 replacements)
-3. A `show_history()` method that displays all commands in the history stack
-4. A `show_redo_stack()` method that shows what can be re-done
+3. A `showHistory()` method that displays all commands in the history stack
+4. A `showRedoStack()` method that shows what can be re-done
 
 **Test your solution:**
-```python
-editor = TextEditor()
-editor.type_text("Hello World Hello India Hello Python")
-editor.show_history()  # 1 command
+```java
+TextEditor editor = new TextEditor();
+editor.typeText("Hello World Hello India Hello Python");
+editor.showHistory();  // 1 command
 
-# Replace all "Hello" with "Namaste" as one batch
-editor.batch_replace("Hello", "Namaste")
-print(editor.content)  # "Namaste World Namaste India Namaste Python"
-editor.show_history()  # 2 commands (the batch counts as 1)
+// Replace all "Hello" with "Namaste" as one batch
+editor.batchReplace("Hello", "Namaste");
+System.out.println(editor.getContent());  // "Namaste World Namaste India Namaste Python"
+editor.showHistory();  // 2 commands (the batch counts as 1)
 
-# One undo should revert ALL replacements
-editor.undo()
-print(editor.content)  # "Hello World Hello India Hello Python"
+// One undo should revert ALL replacements
+editor.undo();
+System.out.println(editor.getContent());  // "Hello World Hello India Hello Python"
 ```
 
 ---
@@ -1410,10 +1673,10 @@ Implement the complete Ola ride lifecycle using the State pattern. This is a rea
 | Action | SEARCHING | DRIVER_ASSIGNED | WAITING | IN_RIDE | COMPLETED |
 |--------|-----------|----------------|---------|---------|-----------|
 | cancel() | Cancel (free) | Cancel (Rs.50 fee) | Cancel (Rs.100 fee) | NOT ALLOWED | NOT ALLOWED |
-| driver_found() | -> DRIVER_ASSIGNED | "Already assigned" | N/A | N/A | N/A |
-| driver_arrived() | N/A | -> WAITING | "Already waiting" | N/A | N/A |
-| start_ride() | N/A | N/A | -> IN_RIDE | "Already riding" | N/A |
-| end_ride() | N/A | N/A | N/A | -> COMPLETED | N/A |
+| driverFound() | -> DRIVER_ASSIGNED | "Already assigned" | N/A | N/A | N/A |
+| driverArrived() | N/A | -> WAITING | "Already waiting" | N/A | N/A |
+| startRide() | N/A | N/A | -> IN_RIDE | "Already riding" | N/A |
+| endRide() | N/A | N/A | N/A | -> COMPLETED | N/A |
 | rate(stars) | N/A | N/A | N/A | N/A | Record rating |
 
 Implement the `Ride` class and all state classes. Show a complete ride lifecycle from booking to rating.

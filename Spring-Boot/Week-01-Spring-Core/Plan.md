@@ -971,7 +971,7 @@ java -jar my-app.jar --spring.profiles.active=prod
 variables on the server. Developers never touch production config files.
 
 ---
-
+End of Day 2
 ## 8. Common Mistakes Beginners Make
 
 ### Mistake 1: Storing State in Singleton Beans

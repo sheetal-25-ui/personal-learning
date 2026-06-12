@@ -91,7 +91,7 @@ Let us identify the objects in this system:
 ParkingLot
   |--- has many ---> ParkingFloor
                        |--- has many ---> ParkingSpot
-                                            |--- can hold ---> Vehicle (or None)
+                                            |--- can hold ---> Vehicle (or null)
   |--- has many ---> ParkingTicket (active tickets)
   |--- has a ------> FeeStrategy (current pricing strategy)
 ```
@@ -104,404 +104,560 @@ ParkingLot
 
 ### Full Code Solution
 
-```python
-from enum import Enum
-from datetime import datetime, timedelta
-from abc import ABC, abstractmethod
+```java
+import java.time.LocalDateTime;
+import java.time.Duration;
+import java.util.*;
 
-# ============================================================
-# ENUMS — Define the types/categories in the system
-# Enums prevent typos. You cannot accidentally write "bke" instead of "bike"
-# because the IDE will catch it. With strings, typos are silent bugs.
-# ============================================================
+// ============================================================
+// ENUMS — Define the types/categories in the system
+// Enums prevent typos. You cannot accidentally write "bke" instead of "BIKE"
+// because the IDE will catch it. With strings, typos are silent bugs.
+// ============================================================
 
-class VehicleType(Enum):
-    """Types of vehicles that can park here."""
-    BIKE = "bike"
-    CAR = "car"
-    BUS = "bus"
+enum VehicleType {
+    // Types of vehicles that can park here.
+    BIKE("bike"),
+    CAR("car"),
+    BUS("bus");
 
-class SpotType(Enum):
-    """Types of parking spots. Each matches a vehicle type."""
-    COMPACT = "compact"    # Small spots near the entrance — for bikes/scooters
-    REGULAR = "regular"    # Standard spots — for cars
-    LARGE = "large"        # Extra-wide/tall spots — for buses and large SUVs
+    private final String value;
+    VehicleType(String value) { this.value = value; }
+    public String getValue() { return value; }
+}
 
-# ============================================================
-# VEHICLE — represents a vehicle coming to park
-# This is a simple data class. A vehicle knows its license plate
-# and its type — nothing else. It does not know about parking spots
-# or fees. (Single Responsibility Principle)
-# ============================================================
+enum SpotType {
+    // Types of parking spots. Each matches a vehicle type.
+    COMPACT("compact"),    // Small spots near the entrance — for bikes/scooters
+    REGULAR("regular"),    // Standard spots — for cars
+    LARGE("large");        // Extra-wide/tall spots — for buses and large SUVs
 
-class Vehicle:
-    def __init__(self, license_plate: str, vehicle_type: VehicleType):
-        self.license_plate = license_plate
-        self.vehicle_type = vehicle_type
+    private final String value;
+    SpotType(String value) { this.value = value; }
+    public String getValue() { return value; }
+}
 
-    def __str__(self):
-        return f"{self.vehicle_type.value.title()} [{self.license_plate}]"
+// ============================================================
+// VEHICLE — represents a vehicle coming to park
+// This is a simple data class. A vehicle knows its license plate
+// and its type — nothing else. It does not know about parking spots
+// or fees. (Single Responsibility Principle)
+// ============================================================
 
-# ============================================================
-# PARKING SPOT — a single spot on a floor
-# A spot knows its ID, type, floor, and whether it is occupied.
-# It can park a vehicle and release it.
-# ============================================================
+class Vehicle {
+    private String licensePlate;
+    private VehicleType vehicleType;
 
-class ParkingSpot:
-    def __init__(self, spot_id: str, spot_type: SpotType, floor_number: int):
-        self.spot_id = spot_id
-        self.spot_type = spot_type
-        self.floor_number = floor_number
-        self.is_occupied = False
-        self.vehicle = None  # Will hold a Vehicle object when occupied
-
-    def park(self, vehicle: Vehicle) -> bool:
-        """
-        Attempt to park a vehicle in this spot.
-        Returns True if successful, False if spot is already occupied.
-        """
-        if self.is_occupied:
-            return False
-        self.vehicle = vehicle
-        self.is_occupied = True
-        return True
-
-    def release(self) -> Vehicle:
-        """
-        Remove the vehicle from this spot.
-        Returns the vehicle that was parked here.
-        """
-        vehicle = self.vehicle
-        self.vehicle = None
-        self.is_occupied = False
-        return vehicle
-
-    def __str__(self):
-        status = f"OCCUPIED by {self.vehicle}" if self.is_occupied else "AVAILABLE"
-        return f"Spot {self.spot_id} (Floor {self.floor_number}, {self.spot_type.value}) - {status}"
-
-# ============================================================
-# PARKING FLOOR — a floor with many spots
-# Knows how to find available spots and track capacity.
-# ============================================================
-
-class ParkingFloor:
-    def __init__(self, floor_number: int):
-        self.floor_number = floor_number
-        self.spots = []  # List of ParkingSpot objects on this floor
-
-    def add_spot(self, spot: ParkingSpot):
-        """Add a parking spot to this floor."""
-        self.spots.append(spot)
-
-    def find_available_spot(self, spot_type: SpotType) -> ParkingSpot:
-        """
-        Find the first available spot of the given type on this floor.
-        Returns None if no spot is available.
-        """
-        for spot in self.spots:
-            if spot.spot_type == spot_type and not spot.is_occupied:
-                return spot
-        return None
-
-    def get_available_count(self, spot_type: SpotType = None) -> int:
-        """Count available spots, optionally filtered by type."""
-        return sum(
-            1 for spot in self.spots
-            if not spot.is_occupied
-            and (spot_type is None or spot.spot_type == spot_type)
-        )
-
-    def get_total_count(self, spot_type: SpotType = None) -> int:
-        """Count total spots, optionally filtered by type."""
-        return sum(
-            1 for spot in self.spots
-            if spot_type is None or spot.spot_type == spot_type
-        )
-
-# ============================================================
-# PARKING TICKET — issued at entry, closed at exit
-# Links a vehicle to a spot and tracks entry/exit times.
-# The ticket does NOT calculate fees — that is the FeeStrategy's job.
-# ============================================================
-
-class ParkingTicket:
-    _ticket_counter = 0  # Class variable for generating unique ticket IDs
-
-    def __init__(self, vehicle: Vehicle, spot: ParkingSpot):
-        ParkingTicket._ticket_counter += 1
-        self.ticket_id = f"TKT-{ParkingTicket._ticket_counter:04d}"
-        self.vehicle = vehicle
-        self.spot = spot
-        self.entry_time = datetime.now()
-        self.exit_time = None
-        self.is_paid = False
-        self.amount_paid = 0.0
-
-    def close(self, exit_time: datetime = None):
-        """Mark the ticket as closed (vehicle is leaving)."""
-        self.exit_time = exit_time or datetime.now()
-
-    def get_duration_hours(self) -> float:
-        """Calculate how many hours the vehicle was parked."""
-        exit = self.exit_time or datetime.now()
-        duration = (exit - self.entry_time).total_seconds() / 3600
-        return max(duration, 0.5)  # Minimum 30 minutes (half hour)
-
-    def __str__(self):
-        duration = f"{self.get_duration_hours():.1f} hours" if self.exit_time else "ACTIVE"
-        return (f"Ticket {self.ticket_id}: {self.vehicle} at {self.spot.spot_id} "
-                f"({duration})")
-
-# ============================================================
-# FEE STRATEGY — Strategy pattern for different pricing models
-# The parking lot can switch pricing strategies at runtime.
-# For example: normal pricing on weekdays, premium on weekends,
-# flat rate during festivals, etc.
-# ============================================================
-
-class FeeStrategy(ABC):
-    """Base class for all fee calculation strategies."""
-    @abstractmethod
-    def calculate_fee(self, ticket: ParkingTicket) -> float:
-        pass
-
-    @abstractmethod
-    def strategy_name(self) -> str:
-        pass
-
-class HourlyFeeStrategy(FeeStrategy):
-    """
-    Standard hourly pricing — different rates per vehicle type.
-    This is what most mall parking lots in India use.
-    """
-    def __init__(self):
-        # Rate per hour for each spot type (in Rupees)
-        self._rates = {
-            SpotType.COMPACT: 20,    # Rs.20/hr for bikes
-            SpotType.REGULAR: 40,    # Rs.40/hr for cars
-            SpotType.LARGE: 80,      # Rs.80/hr for buses
-        }
-
-    def calculate_fee(self, ticket: ParkingTicket) -> float:
-        hours = ticket.get_duration_hours()
-        rate = self._rates.get(ticket.spot.spot_type, 40)
-        # Round up to the next hour (no partial hour discount)
-        import math
-        billable_hours = math.ceil(hours)
-        return billable_hours * rate
-
-    def strategy_name(self):
-        return "Hourly Rate"
-
-class FlatRateFeeStrategy(FeeStrategy):
-    """
-    Flat rate — pay once, park all day.
-    Used by airport parking lots (e.g., Mumbai airport parking).
-    """
-    def __init__(self):
-        self._rates = {
-            SpotType.COMPACT: 50,     # Rs.50 flat for bikes
-            SpotType.REGULAR: 200,    # Rs.200 flat for cars
-            SpotType.LARGE: 500,      # Rs.500 flat for buses
-        }
-
-    def calculate_fee(self, ticket: ParkingTicket) -> float:
-        return self._rates.get(ticket.spot.spot_type, 200)
-
-    def strategy_name(self):
-        return "Flat Rate (All Day)"
-
-class WeekendSurgeFeeStrategy(FeeStrategy):
-    """
-    Weekend/holiday pricing — 1.5x the normal hourly rate.
-    Used during Big Billion Days sale at malls, weekends, festivals.
-    """
-    def __init__(self, base_strategy: HourlyFeeStrategy, multiplier: float = 1.5):
-        self._base = base_strategy
-        self._multiplier = multiplier
-
-    def calculate_fee(self, ticket: ParkingTicket) -> float:
-        base_fee = self._base.calculate_fee(ticket)
-        return base_fee * self._multiplier
-
-    def strategy_name(self):
-        return f"Weekend Surge ({self._multiplier}x)"
-
-# ============================================================
-# PARKING LOT — the main class (Singleton in a real system)
-# Manages floors, spots, tickets, and fee calculation.
-# This is the "god class" for the parking system — the entry point
-# that external code interacts with.
-# ============================================================
-
-class ParkingLot:
-    # Mapping: which vehicle type needs which spot type
-    VEHICLE_TO_SPOT = {
-        VehicleType.BIKE: SpotType.COMPACT,
-        VehicleType.CAR: SpotType.REGULAR,
-        VehicleType.BUS: SpotType.LARGE,
+    public Vehicle(String licensePlate, VehicleType vehicleType) {
+        this.licensePlate = licensePlate;
+        this.vehicleType = vehicleType;
     }
 
-    def __init__(self, name: str, fee_strategy: FeeStrategy = None):
-        self.name = name
-        self.floors = []                    # List of ParkingFloor objects
-        self.active_tickets = {}            # license_plate -> ParkingTicket
-        self._fee_strategy = fee_strategy or HourlyFeeStrategy()
+    public String getLicensePlate() { return licensePlate; }
+    public VehicleType getVehicleType() { return vehicleType; }
 
-    def add_floor(self, floor: ParkingFloor):
-        """Add a floor to the parking lot."""
-        self.floors.append(floor)
+    @Override
+    public String toString() {
+        String typeName = vehicleType.getValue().substring(0, 1).toUpperCase()
+                + vehicleType.getValue().substring(1);
+        return typeName + " [" + licensePlate + "]";
+    }
+}
 
-    def set_fee_strategy(self, strategy: FeeStrategy):
-        """
-        Change the pricing strategy at runtime (Strategy pattern).
-        Example: switch to weekend pricing on Saturday morning.
-        """
-        print(f"[ParkingLot] Pricing changed to: {strategy.strategy_name()}")
-        self._fee_strategy = strategy
+// ============================================================
+// PARKING SPOT — a single spot on a floor
+// A spot knows its ID, type, floor, and whether it is occupied.
+// It can park a vehicle and release it.
+// ============================================================
 
-    def find_available_spot(self, vehicle_type: VehicleType) -> ParkingSpot:
-        """
-        Search all floors for an available spot matching the vehicle type.
-        Returns the first available spot (closest to entrance = lowest floor).
-        """
-        needed_spot_type = self.VEHICLE_TO_SPOT[vehicle_type]
-        for floor in self.floors:
-            spot = floor.find_available_spot(needed_spot_type)
-            if spot:
-                return spot
-        return None
+class ParkingSpot {
+    private String spotId;
+    private SpotType spotType;
+    private int floorNumber;
+    private boolean isOccupied;
+    private Vehicle vehicle; // Will hold a Vehicle object when occupied
 
-    def park_vehicle(self, vehicle: Vehicle) -> ParkingTicket:
-        """
-        Main entry point: vehicle arrives, find a spot, issue a ticket.
-        """
-        # Check if vehicle is already parked
-        if vehicle.license_plate in self.active_tickets:
-            print(f"Vehicle {vehicle.license_plate} is already parked!")
-            return None
+    public ParkingSpot(String spotId, SpotType spotType, int floorNumber) {
+        this.spotId = spotId;
+        this.spotType = spotType;
+        this.floorNumber = floorNumber;
+        this.isOccupied = false;
+        this.vehicle = null;
+    }
 
-        # Find an available spot
-        spot = self.find_available_spot(vehicle.vehicle_type)
-        if not spot:
-            print(f"Sorry! No {self.VEHICLE_TO_SPOT[vehicle.vehicle_type].value} "
-                  f"spot available for {vehicle}")
-            return None
+    /**
+     * Attempt to park a vehicle in this spot.
+     * Returns true if successful, false if spot is already occupied.
+     */
+    public boolean park(Vehicle vehicle) {
+        if (this.isOccupied) {
+            return false;
+        }
+        this.vehicle = vehicle;
+        this.isOccupied = true;
+        return true;
+    }
 
-        # Park the vehicle and issue a ticket
-        spot.park(vehicle)
-        ticket = ParkingTicket(vehicle, spot)
-        self.active_tickets[vehicle.license_plate] = ticket
+    /**
+     * Remove the vehicle from this spot.
+     * Returns the vehicle that was parked here.
+     */
+    public Vehicle release() {
+        Vehicle v = this.vehicle;
+        this.vehicle = null;
+        this.isOccupied = false;
+        return v;
+    }
 
-        print(f"Parked {vehicle} at Spot {spot.spot_id} (Floor {spot.floor_number})")
-        print(f"  Ticket: {ticket.ticket_id}")
-        return ticket
+    public String getSpotId() { return spotId; }
+    public SpotType getSpotType() { return spotType; }
+    public int getFloorNumber() { return floorNumber; }
+    public boolean isOccupied() { return isOccupied; }
+    public Vehicle getVehicle() { return vehicle; }
 
-    def exit_vehicle(self, license_plate: str, exit_time: datetime = None) -> float:
-        """
-        Main exit point: vehicle is leaving, calculate fee, free the spot.
-        """
-        ticket = self.active_tickets.get(license_plate)
-        if not ticket:
-            print(f"No active ticket found for {license_plate}")
-            return 0
+    @Override
+    public String toString() {
+        String status = isOccupied ? "OCCUPIED by " + vehicle : "AVAILABLE";
+        return "Spot " + spotId + " (Floor " + floorNumber + ", " + spotType.getValue() + ") - " + status;
+    }
+}
 
-        # Close the ticket (set exit time)
-        ticket.close(exit_time)
+// ============================================================
+// PARKING FLOOR — a floor with many spots
+// Knows how to find available spots and track capacity.
+// ============================================================
 
-        # Calculate fee using the current strategy
-        fee = self._fee_strategy.calculate_fee(ticket)
-        ticket.amount_paid = fee
-        ticket.is_paid = True
+class ParkingFloor {
+    private int floorNumber;
+    private List<ParkingSpot> spots; // List of ParkingSpot objects on this floor
 
-        # Free the spot
-        ticket.spot.release()
+    public ParkingFloor(int floorNumber) {
+        this.floorNumber = floorNumber;
+        this.spots = new ArrayList<>();
+    }
 
-        # Remove from active tickets
-        del self.active_tickets[license_plate]
+    /** Add a parking spot to this floor. */
+    public void addSpot(ParkingSpot spot) {
+        spots.add(spot);
+    }
 
-        print(f"Vehicle {license_plate} exited from Spot {ticket.spot.spot_id}")
-        print(f"  Duration: {ticket.get_duration_hours():.1f} hours")
-        print(f"  Strategy: {self._fee_strategy.strategy_name()}")
-        print(f"  Fee: Rs.{fee:.0f}")
-        return fee
+    /**
+     * Find the first available spot of the given type on this floor.
+     * Returns null if no spot is available.
+     */
+    public ParkingSpot findAvailableSpot(SpotType spotType) {
+        for (ParkingSpot spot : spots) {
+            if (spot.getSpotType() == spotType && !spot.isOccupied()) {
+                return spot;
+            }
+        }
+        return null;
+    }
 
-    def get_availability(self) -> dict:
-        """Show available spots per floor and type."""
-        report = {}
-        for floor in self.floors:
-            floor_key = f"Floor {floor.floor_number}"
-            report[floor_key] = {}
-            for spot_type in SpotType:
-                available = floor.get_available_count(spot_type)
-                total = floor.get_total_count(spot_type)
-                if total > 0:
-                    report[floor_key][spot_type.value] = f"{available}/{total}"
-        return report
+    /** Count available spots, optionally filtered by type. */
+    public int getAvailableCount(SpotType spotType) {
+        int count = 0;
+        for (ParkingSpot spot : spots) {
+            if (!spot.isOccupied() && (spotType == null || spot.getSpotType() == spotType)) {
+                count++;
+            }
+        }
+        return count;
+    }
 
-    def display_availability(self):
-        """Pretty-print the availability board (like the LED display at the mall entrance)."""
-        print(f"\n{'=' * 50}")
-        print(f"  {self.name} — Parking Availability")
-        print(f"{'=' * 50}")
-        report = self.get_availability()
-        for floor_name, spots in report.items():
-            print(f"  {floor_name}:")
-            for spot_type, count in spots.items():
-                print(f"    {spot_type.title()}: {count} available")
-        print(f"{'=' * 50}\n")
+    /** Count total spots, optionally filtered by type. */
+    public int getTotalCount(SpotType spotType) {
+        int count = 0;
+        for (ParkingSpot spot : spots) {
+            if (spotType == null || spot.getSpotType() == spotType) {
+                count++;
+            }
+        }
+        return count;
+    }
 
+    public int getFloorNumber() { return floorNumber; }
+}
 
-# ============================================================
-# BUILD AND TEST THE SYSTEM
-# ============================================================
+// ============================================================
+// PARKING TICKET — issued at entry, closed at exit
+// Links a vehicle to a spot and tracks entry/exit times.
+// The ticket does NOT calculate fees — that is the FeeStrategy's job.
+// ============================================================
 
-# Create the parking lot
-lot = ParkingLot("Phoenix Marketcity Parking", HourlyFeeStrategy())
+class ParkingTicket {
+    private static int ticketCounter = 0; // Class variable for generating unique ticket IDs
 
-# Create floors and spots
-for floor_num in range(1, 4):  # 3 floors
-    floor = ParkingFloor(floor_num)
+    private String ticketId;
+    private Vehicle vehicle;
+    private ParkingSpot spot;
+    private LocalDateTime entryTime;
+    private LocalDateTime exitTime;
+    private boolean isPaid;
+    private double amountPaid;
 
-    # Each floor has: 10 compact, 20 regular, 5 large spots
-    for i in range(1, 11):
-        floor.add_spot(ParkingSpot(f"F{floor_num}-C{i:02d}", SpotType.COMPACT, floor_num))
-    for i in range(1, 21):
-        floor.add_spot(ParkingSpot(f"F{floor_num}-R{i:02d}", SpotType.REGULAR, floor_num))
-    for i in range(1, 6):
-        floor.add_spot(ParkingSpot(f"F{floor_num}-L{i:02d}", SpotType.LARGE, floor_num))
+    public ParkingTicket(Vehicle vehicle, ParkingSpot spot) {
+        ticketCounter++;
+        this.ticketId = String.format("TKT-%04d", ticketCounter);
+        this.vehicle = vehicle;
+        this.spot = spot;
+        this.entryTime = LocalDateTime.now();
+        this.exitTime = null;
+        this.isPaid = false;
+        this.amountPaid = 0.0;
+    }
 
-    lot.add_floor(floor)
+    /** Mark the ticket as closed (vehicle is leaving). */
+    public void close(LocalDateTime exitTime) {
+        this.exitTime = (exitTime != null) ? exitTime : LocalDateTime.now();
+    }
 
-# Show initial availability
-lot.display_availability()
+    /** Calculate how many hours the vehicle was parked. */
+    public double getDurationHours() {
+        LocalDateTime exit = (this.exitTime != null) ? this.exitTime : LocalDateTime.now();
+        double duration = Duration.between(this.entryTime, exit).getSeconds() / 3600.0;
+        return Math.max(duration, 0.5); // Minimum 30 minutes (half hour)
+    }
 
-# Park some vehicles
-car1 = Vehicle("MH-02-AB-1234", VehicleType.CAR)
-car2 = Vehicle("MH-04-CD-5678", VehicleType.CAR)
-bike1 = Vehicle("MH-12-EF-9012", VehicleType.BIKE)
-bus1 = Vehicle("MH-01-GH-3456", VehicleType.BUS)
+    public String getTicketId() { return ticketId; }
+    public Vehicle getVehicle() { return vehicle; }
+    public ParkingSpot getSpot() { return spot; }
+    public LocalDateTime getEntryTime() { return entryTime; }
+    public LocalDateTime getExitTime() { return exitTime; }
+    public boolean isPaid() { return isPaid; }
+    public double getAmountPaid() { return amountPaid; }
+    public void setAmountPaid(double amountPaid) { this.amountPaid = amountPaid; }
+    public void setPaid(boolean paid) { this.isPaid = paid; }
 
-lot.park_vehicle(car1)
-lot.park_vehicle(car2)
-lot.park_vehicle(bike1)
-lot.park_vehicle(bus1)
+    @Override
+    public String toString() {
+        String duration = (exitTime != null)
+                ? String.format("%.1f hours", getDurationHours())
+                : "ACTIVE";
+        return "Ticket " + ticketId + ": " + vehicle + " at " + spot.getSpotId()
+                + " (" + duration + ")";
+    }
+}
 
-# Show availability after parking
-lot.display_availability()
+// ============================================================
+// FEE STRATEGY — Strategy pattern for different pricing models
+// The parking lot can switch pricing strategies at runtime.
+// For example: normal pricing on weekdays, premium on weekends,
+// flat rate during festivals, etc.
+// ============================================================
 
-# Simulate exit after some hours
-# (We fake the exit time to simulate 3 hours of parking)
-exit_time = datetime.now() + timedelta(hours=3)
-lot.exit_vehicle("MH-02-AB-1234", exit_time)
-# Fee: Rs.120 (3 hours x Rs.40/hr for regular spot)
+/** Base class for all fee calculation strategies. */
+abstract class FeeStrategy {
+    public abstract double calculateFee(ParkingTicket ticket);
+    public abstract String strategyName();
+}
 
-# Switch to weekend pricing and exit another vehicle
-lot.set_fee_strategy(WeekendSurgeFeeStrategy(HourlyFeeStrategy(), 1.5))
-lot.exit_vehicle("MH-04-CD-5678", exit_time)
-# Fee: Rs.180 (3 hours x Rs.40/hr x 1.5 surge = Rs.180)
+/**
+ * Standard hourly pricing — different rates per vehicle type.
+ * This is what most mall parking lots in India use.
+ */
+class HourlyFeeStrategy extends FeeStrategy {
+    // Rate per hour for each spot type (in Rupees)
+    private Map<SpotType, Integer> rates;
+
+    public HourlyFeeStrategy() {
+        rates = new HashMap<>();
+        rates.put(SpotType.COMPACT, 20);   // Rs.20/hr for bikes
+        rates.put(SpotType.REGULAR, 40);   // Rs.40/hr for cars
+        rates.put(SpotType.LARGE, 80);     // Rs.80/hr for buses
+    }
+
+    @Override
+    public double calculateFee(ParkingTicket ticket) {
+        double hours = ticket.getDurationHours();
+        int rate = rates.getOrDefault(ticket.getSpot().getSpotType(), 40);
+        // Round up to the next hour (no partial hour discount)
+        int billableHours = (int) Math.ceil(hours);
+        return billableHours * rate;
+    }
+
+    @Override
+    public String strategyName() {
+        return "Hourly Rate";
+    }
+}
+
+/**
+ * Flat rate — pay once, park all day.
+ * Used by airport parking lots (e.g., Mumbai airport parking).
+ */
+class FlatRateFeeStrategy extends FeeStrategy {
+    private Map<SpotType, Integer> rates;
+
+    public FlatRateFeeStrategy() {
+        rates = new HashMap<>();
+        rates.put(SpotType.COMPACT, 50);    // Rs.50 flat for bikes
+        rates.put(SpotType.REGULAR, 200);   // Rs.200 flat for cars
+        rates.put(SpotType.LARGE, 500);     // Rs.500 flat for buses
+    }
+
+    @Override
+    public double calculateFee(ParkingTicket ticket) {
+        return rates.getOrDefault(ticket.getSpot().getSpotType(), 200);
+    }
+
+    @Override
+    public String strategyName() {
+        return "Flat Rate (All Day)";
+    }
+}
+
+/**
+ * Weekend/holiday pricing — 1.5x the normal hourly rate.
+ * Used during Big Billion Days sale at malls, weekends, festivals.
+ */
+class WeekendSurgeFeeStrategy extends FeeStrategy {
+    private HourlyFeeStrategy baseStrategy;
+    private double multiplier;
+
+    public WeekendSurgeFeeStrategy(HourlyFeeStrategy baseStrategy, double multiplier) {
+        this.baseStrategy = baseStrategy;
+        this.multiplier = multiplier;
+    }
+
+    public WeekendSurgeFeeStrategy(HourlyFeeStrategy baseStrategy) {
+        this(baseStrategy, 1.5);
+    }
+
+    @Override
+    public double calculateFee(ParkingTicket ticket) {
+        double baseFee = baseStrategy.calculateFee(ticket);
+        return baseFee * multiplier;
+    }
+
+    @Override
+    public String strategyName() {
+        return "Weekend Surge (" + multiplier + "x)";
+    }
+}
+
+// ============================================================
+// PARKING LOT — the main class (Singleton in a real system)
+// Manages floors, spots, tickets, and fee calculation.
+// This is the "god class" for the parking system — the entry point
+// that external code interacts with.
+// ============================================================
+
+class ParkingLot {
+    // Mapping: which vehicle type needs which spot type
+    private static final Map<VehicleType, SpotType> VEHICLE_TO_SPOT = new HashMap<>();
+    static {
+        VEHICLE_TO_SPOT.put(VehicleType.BIKE, SpotType.COMPACT);
+        VEHICLE_TO_SPOT.put(VehicleType.CAR, SpotType.REGULAR);
+        VEHICLE_TO_SPOT.put(VehicleType.BUS, SpotType.LARGE);
+    }
+
+    private String name;
+    private List<ParkingFloor> floors;              // List of ParkingFloor objects
+    private Map<String, ParkingTicket> activeTickets; // licensePlate -> ParkingTicket
+    private FeeStrategy feeStrategy;
+
+    public ParkingLot(String name, FeeStrategy feeStrategy) {
+        this.name = name;
+        this.floors = new ArrayList<>();
+        this.activeTickets = new HashMap<>();
+        this.feeStrategy = (feeStrategy != null) ? feeStrategy : new HourlyFeeStrategy();
+    }
+
+    public ParkingLot(String name) {
+        this(name, new HourlyFeeStrategy());
+    }
+
+    /** Add a floor to the parking lot. */
+    public void addFloor(ParkingFloor floor) {
+        floors.add(floor);
+    }
+
+    /**
+     * Change the pricing strategy at runtime (Strategy pattern).
+     * Example: switch to weekend pricing on Saturday morning.
+     */
+    public void setFeeStrategy(FeeStrategy strategy) {
+        System.out.println("[ParkingLot] Pricing changed to: " + strategy.strategyName());
+        this.feeStrategy = strategy;
+    }
+
+    /**
+     * Search all floors for an available spot matching the vehicle type.
+     * Returns the first available spot (closest to entrance = lowest floor).
+     */
+    public ParkingSpot findAvailableSpot(VehicleType vehicleType) {
+        SpotType neededSpotType = VEHICLE_TO_SPOT.get(vehicleType);
+        for (ParkingFloor floor : floors) {
+            ParkingSpot spot = floor.findAvailableSpot(neededSpotType);
+            if (spot != null) {
+                return spot;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Main entry point: vehicle arrives, find a spot, issue a ticket.
+     */
+    public ParkingTicket parkVehicle(Vehicle vehicle) {
+        // Check if vehicle is already parked
+        if (activeTickets.containsKey(vehicle.getLicensePlate())) {
+            System.out.println("Vehicle " + vehicle.getLicensePlate() + " is already parked!");
+            return null;
+        }
+
+        // Find an available spot
+        ParkingSpot spot = findAvailableSpot(vehicle.getVehicleType());
+        if (spot == null) {
+            System.out.println("Sorry! No " + VEHICLE_TO_SPOT.get(vehicle.getVehicleType()).getValue()
+                    + " spot available for " + vehicle);
+            return null;
+        }
+
+        // Park the vehicle and issue a ticket
+        spot.park(vehicle);
+        ParkingTicket ticket = new ParkingTicket(vehicle, spot);
+        activeTickets.put(vehicle.getLicensePlate(), ticket);
+
+        System.out.println("Parked " + vehicle + " at Spot " + spot.getSpotId()
+                + " (Floor " + spot.getFloorNumber() + ")");
+        System.out.println("  Ticket: " + ticket.getTicketId());
+        return ticket;
+    }
+
+    /**
+     * Main exit point: vehicle is leaving, calculate fee, free the spot.
+     */
+    public double exitVehicle(String licensePlate, LocalDateTime exitTime) {
+        ParkingTicket ticket = activeTickets.get(licensePlate);
+        if (ticket == null) {
+            System.out.println("No active ticket found for " + licensePlate);
+            return 0;
+        }
+
+        // Close the ticket (set exit time)
+        ticket.close(exitTime);
+
+        // Calculate fee using the current strategy
+        double fee = feeStrategy.calculateFee(ticket);
+        ticket.setAmountPaid(fee);
+        ticket.setPaid(true);
+
+        // Free the spot
+        ticket.getSpot().release();
+
+        // Remove from active tickets
+        activeTickets.remove(licensePlate);
+
+        System.out.println("Vehicle " + licensePlate + " exited from Spot " + ticket.getSpot().getSpotId());
+        System.out.printf("  Duration: %.1f hours%n", ticket.getDurationHours());
+        System.out.println("  Strategy: " + feeStrategy.strategyName());
+        System.out.printf("  Fee: Rs.%.0f%n", fee);
+        return fee;
+    }
+
+    public double exitVehicle(String licensePlate) {
+        return exitVehicle(licensePlate, null);
+    }
+
+    /** Show available spots per floor and type. */
+    public Map<String, Map<String, String>> getAvailability() {
+        Map<String, Map<String, String>> report = new LinkedHashMap<>();
+        for (ParkingFloor floor : floors) {
+            String floorKey = "Floor " + floor.getFloorNumber();
+            Map<String, String> floorReport = new LinkedHashMap<>();
+            for (SpotType spotType : SpotType.values()) {
+                int available = floor.getAvailableCount(spotType);
+                int total = floor.getTotalCount(spotType);
+                if (total > 0) {
+                    floorReport.put(spotType.getValue(), available + "/" + total);
+                }
+            }
+            report.put(floorKey, floorReport);
+        }
+        return report;
+    }
+
+    /** Pretty-print the availability board (like the LED display at the mall entrance). */
+    public void displayAvailability() {
+        System.out.println();
+        System.out.println("==================================================");
+        System.out.println("  " + name + " — Parking Availability");
+        System.out.println("==================================================");
+        Map<String, Map<String, String>> report = getAvailability();
+        for (Map.Entry<String, Map<String, String>> floorEntry : report.entrySet()) {
+            System.out.println("  " + floorEntry.getKey() + ":");
+            for (Map.Entry<String, String> spotEntry : floorEntry.getValue().entrySet()) {
+                String typeName = spotEntry.getKey().substring(0, 1).toUpperCase()
+                        + spotEntry.getKey().substring(1);
+                System.out.println("    " + typeName + ": " + spotEntry.getValue() + " available");
+            }
+        }
+        System.out.println("==================================================");
+        System.out.println();
+    }
+}
+
+// ============================================================
+// BUILD AND TEST THE SYSTEM
+// ============================================================
+
+class ParkingLotDemo {
+    public static void main(String[] args) {
+        // Create the parking lot
+        ParkingLot lot = new ParkingLot("Phoenix Marketcity Parking", new HourlyFeeStrategy());
+
+        // Create floors and spots
+        for (int floorNum = 1; floorNum <= 3; floorNum++) { // 3 floors
+            ParkingFloor floor = new ParkingFloor(floorNum);
+
+            // Each floor has: 10 compact, 20 regular, 5 large spots
+            for (int i = 1; i <= 10; i++) {
+                floor.addSpot(new ParkingSpot(
+                        String.format("F%d-C%02d", floorNum, i), SpotType.COMPACT, floorNum));
+            }
+            for (int i = 1; i <= 20; i++) {
+                floor.addSpot(new ParkingSpot(
+                        String.format("F%d-R%02d", floorNum, i), SpotType.REGULAR, floorNum));
+            }
+            for (int i = 1; i <= 5; i++) {
+                floor.addSpot(new ParkingSpot(
+                        String.format("F%d-L%02d", floorNum, i), SpotType.LARGE, floorNum));
+            }
+
+            lot.addFloor(floor);
+        }
+
+        // Show initial availability
+        lot.displayAvailability();
+
+        // Park some vehicles
+        Vehicle car1 = new Vehicle("MH-02-AB-1234", VehicleType.CAR);
+        Vehicle car2 = new Vehicle("MH-04-CD-5678", VehicleType.CAR);
+        Vehicle bike1 = new Vehicle("MH-12-EF-9012", VehicleType.BIKE);
+        Vehicle bus1 = new Vehicle("MH-01-GH-3456", VehicleType.BUS);
+
+        lot.parkVehicle(car1);
+        lot.parkVehicle(car2);
+        lot.parkVehicle(bike1);
+        lot.parkVehicle(bus1);
+
+        // Show availability after parking
+        lot.displayAvailability();
+
+        // Simulate exit after some hours
+        // (We fake the exit time to simulate 3 hours of parking)
+        LocalDateTime exitTime = LocalDateTime.now().plusHours(3);
+        lot.exitVehicle("MH-02-AB-1234", exitTime);
+        // Fee: Rs.120 (3 hours x Rs.40/hr for regular spot)
+
+        // Switch to weekend pricing and exit another vehicle
+        lot.setFeeStrategy(new WeekendSurgeFeeStrategy(new HourlyFeeStrategy(), 1.5));
+        lot.exitVehicle("MH-04-CD-5678", exitTime);
+        // Fee: Rs.180 (3 hours x Rs.40/hr x 1.5 surge = Rs.180)
+    }
+}
 ```
 
 ### Design Patterns Used
@@ -555,196 +711,234 @@ Think about what each data structure is good at:
 
 ### Full Code Solution
 
-```python
-class Node:
-    """
-    A node in the doubly linked list.
-    Each node stores a key-value pair and pointers to the previous and next nodes.
+```java
+import java.util.HashMap;
+import java.util.Map;
 
-    Why doubly linked? Because we need to remove nodes from the MIDDLE of the list
-    in O(1) time. With a singly linked list, removing a node requires traversing
-    from the head to find the previous node — that is O(n).
-    With a doubly linked list, each node knows its previous and next, so removal
-    is just updating 4 pointers — O(1).
-    """
-    def __init__(self, key: int = 0, value: int = 0):
-        self.key = key
-        self.value = value
-        self.prev = None  # Pointer to the previous node
-        self.next = None  # Pointer to the next node
+/**
+ * A node in the doubly linked list.
+ * Each node stores a key-value pair and pointers to the previous and next nodes.
+ *
+ * Why doubly linked? Because we need to remove nodes from the MIDDLE of the list
+ * in O(1) time. With a singly linked list, removing a node requires traversing
+ * from the head to find the previous node — that is O(n).
+ * With a doubly linked list, each node knows its previous and next, so removal
+ * is just updating 4 pointers — O(1).
+ */
+class Node {
+    int key;
+    int value;
+    Node prev; // Pointer to the previous node
+    Node next; // Pointer to the next node
 
-    def __str__(self):
-        return f"({self.key}: {self.value})"
+    public Node(int key, int value) {
+        this.key = key;
+        this.value = value;
+        this.prev = null;
+        this.next = null;
+    }
 
+    public Node() {
+        this(0, 0);
+    }
 
-class LRUCache:
-    """
-    LRU Cache implementation using a HashMap + Doubly Linked List.
+    @Override
+    public String toString() {
+        return "(" + key + ": " + value + ")";
+    }
+}
 
-    The linked list maintains the ORDER of access:
-    - HEAD (front) = Most Recently Used (MRU)
-    - TAIL (back) = Least Recently Used (LRU)
+/**
+ * LRU Cache implementation using a HashMap + Doubly Linked List.
+ *
+ * The linked list maintains the ORDER of access:
+ * - HEAD (front) = Most Recently Used (MRU)
+ * - TAIL (back) = Least Recently Used (LRU)
+ *
+ * The HashMap provides O(1) lookup:
+ * - key -> Node (so we can jump directly to any node in the list)
+ *
+ * Visual representation:
+ *     HashMap: {1: Node1, 2: Node2, 3: Node3}
+ *
+ *     Doubly Linked List (most recent on left):
+ *     [DUMMY_HEAD] <-> [Node3] <-> [Node1] <-> [Node2] <-> [DUMMY_TAIL]
+ *                       (MRU)                    (LRU)
+ *
+ * Why dummy head and tail?
+ * They simplify the code by eliminating edge cases. Without dummies,
+ * every insert/remove must check "is this the head?" and "is this the tail?"
+ * With dummies, there is ALWAYS a node before and after any real node.
+ */
+class LRUCache {
+    private int capacity;
+    private Map<Integer, Node> cache; // HashMap: key -> Node
 
-    The HashMap provides O(1) lookup:
-    - key -> Node (so we can jump directly to any node in the list)
+    // Dummy head and tail nodes
+    // These are sentinel nodes — they never hold real data.
+    // They exist only to simplify insertion/removal logic.
+    private Node head; // Dummy head (left boundary)
+    private Node tail; // Dummy tail (right boundary)
 
-    Visual representation:
-        HashMap: {1: Node1, 2: Node2, 3: Node3}
+    /**
+     * Initialize the cache with a fixed capacity.
+     * Once the cache has this many items, adding a new item
+     * evicts the least recently used item.
+     */
+    public LRUCache(int capacity) {
+        this.capacity = capacity;
+        this.cache = new HashMap<>();
 
-        Doubly Linked List (most recent on left):
-        [DUMMY_HEAD] <-> [Node3] <-> [Node1] <-> [Node2] <-> [DUMMY_TAIL]
-                          (MRU)                    (LRU)
+        // Create dummy head and tail nodes
+        this.head = new Node();
+        this.tail = new Node();
+        this.head.next = this.tail;
+        this.tail.prev = this.head;
+        // Initial state: head <-> tail (empty list)
+    }
 
-    Why dummy head and tail?
-    They simplify the code by eliminating edge cases. Without dummies,
-    every insert/remove must check "is this the head?" and "is this the tail?"
-    With dummies, there is ALWAYS a node before and after any real node.
-    """
+    /**
+     * Remove a node from its current position in the linked list.
+     * This is O(1) because we have direct access to prev and next.
+     *
+     * Before: ... <-> [A] <-> [node] <-> [B] <-> ...
+     * After:  ... <-> [A] <-> [B] <-> ...
+     */
+    private void remove(Node node) {
+        Node prevNode = node.prev;
+        Node nextNode = node.next;
+        prevNode.next = nextNode; // A's next now points to B
+        nextNode.prev = prevNode; // B's prev now points to A
+        // 'node' is now disconnected from the list
+    }
 
-    def __init__(self, capacity: int):
-        """
-        Initialize the cache with a fixed capacity.
-        Once the cache has this many items, adding a new item
-        evicts the least recently used item.
-        """
-        self.capacity = capacity
-        self.cache = {}  # HashMap: key -> Node
+    /**
+     * Add a node right after the dummy head (making it the most recently used).
+     * This is O(1) — just update 4 pointers.
+     *
+     * Before: head <-> [X] <-> ...
+     * After:  head <-> [node] <-> [X] <-> ...
+     */
+    private void addToFront(Node node) {
+        node.prev = this.head;         // node's prev = head
+        node.next = this.head.next;    // node's next = whatever was after head
+        this.head.next.prev = node;    // old first real node's prev = node
+        this.head.next = node;         // head's next = node
+    }
 
-        # Create dummy head and tail nodes
-        # These are sentinel nodes — they never hold real data.
-        # They exist only to simplify insertion/removal logic.
-        self.head = Node()  # Dummy head (left boundary)
-        self.tail = Node()  # Dummy tail (right boundary)
-        self.head.next = self.tail
-        self.tail.prev = self.head
-        # Initial state: head <-> tail (empty list)
+    /**
+     * Get the value for a key.
+     * If the key exists: return its value AND move it to the front (most recently used).
+     * If the key does not exist: return -1.
+     *
+     * Time complexity: O(1)
+     */
+    public int get(int key) {
+        if (!cache.containsKey(key)) {
+            return -1;
+        }
 
-    def _remove(self, node: Node):
-        """
-        Remove a node from its current position in the linked list.
-        This is O(1) because we have direct access to prev and next.
+        // Key exists — find the node via HashMap (O(1))
+        Node node = cache.get(key);
 
-        Before: ... <-> [A] <-> [node] <-> [B] <-> ...
-        After:  ... <-> [A] <-> [B] <-> ...
-        """
-        prev_node = node.prev
-        next_node = node.next
-        prev_node.next = next_node  # A's next now points to B
-        next_node.prev = prev_node  # B's prev now points to A
-        # 'node' is now disconnected from the list
+        // Move to front: remove from current position, add to front
+        // This marks it as "most recently used"
+        remove(node);
+        addToFront(node);
 
-    def _add_to_front(self, node: Node):
-        """
-        Add a node right after the dummy head (making it the most recently used).
-        This is O(1) — just update 4 pointers.
+        return node.value;
+    }
 
-        Before: head <-> [X] <-> ...
-        After:  head <-> [node] <-> [X] <-> ...
-        """
-        node.prev = self.head          # node's prev = head
-        node.next = self.head.next     # node's next = whatever was after head
-        self.head.next.prev = node     # old first real node's prev = node
-        self.head.next = node          # head's next = node
+    /**
+     * Insert or update a key-value pair.
+     * If key already exists: update the value and move to front.
+     * If key does not exist:
+     *     - If cache is full: evict the least recently used (node before tail)
+     *     - Add the new key-value pair to the front
+     *
+     * Time complexity: O(1)
+     */
+    public void put(int key, int value) {
+        if (cache.containsKey(key)) {
+            // Key already exists — update value and move to front
+            Node node = cache.get(key);
+            node.value = value;
+            remove(node);
+            addToFront(node);
+        } else {
+            // Key does not exist — might need to evict
+            if (cache.size() >= capacity) {
+                // Cache is full! Evict the least recently used item.
+                // The LRU item is the node just before the dummy tail.
+                Node lruNode = tail.prev;
+                remove(lruNode);
+                cache.remove(lruNode.key); // Remove from HashMap too!
+            }
 
-    def get(self, key: int) -> int:
-        """
-        Get the value for a key.
-        If the key exists: return its value AND move it to the front (most recently used).
-        If the key does not exist: return -1.
+            // Create a new node and add it to the front
+            Node newNode = new Node(key, value);
+            cache.put(key, newNode);
+            addToFront(newNode);
+        }
+    }
 
-        Time complexity: O(1)
-        """
-        if key not in self.cache:
-            return -1
+    /** Print the cache contents from most recently used to least recently used. */
+    public void display() {
+        StringBuilder sb = new StringBuilder();
+        Node current = head.next;
+        boolean first = true;
+        while (current != tail) {
+            if (!first) sb.append(" -> ");
+            sb.append(current.key + ":" + current.value);
+            first = false;
+            current = current.next;
+        }
+        System.out.println("Cache (" + cache.size() + "/" + capacity + "): [" + sb + "]");
+        System.out.println("  (Left = Most Recent, Right = Least Recent)");
+    }
+}
 
-        # Key exists — find the node via HashMap (O(1))
-        node = self.cache[key]
+// ============================================================
+// WALKTHROUGH — step by step
+// ============================================================
 
-        # Move to front: remove from current position, add to front
-        # This marks it as "most recently used"
-        self._remove(node)
-        self._add_to_front(node)
+class LRUCacheDemo {
+    public static void main(String[] args) {
+        LRUCache cache = new LRUCache(3); // Capacity of 3
 
-        return node.value
+        // Put 3 items
+        cache.put(1, 100);
+        cache.display(); // [1:100]
 
-    def put(self, key: int, value: int):
-        """
-        Insert or update a key-value pair.
-        If key already exists: update the value and move to front.
-        If key does not exist:
-            - If cache is full: evict the least recently used (node before tail)
-            - Add the new key-value pair to the front
+        cache.put(2, 200);
+        cache.display(); // [2:200 -> 1:100]
 
-        Time complexity: O(1)
-        """
-        if key in self.cache:
-            # Key already exists — update value and move to front
-            node = self.cache[key]
-            node.value = value
-            self._remove(node)
-            self._add_to_front(node)
-        else:
-            # Key does not exist — might need to evict
-            if len(self.cache) >= self.capacity:
-                # Cache is full! Evict the least recently used item.
-                # The LRU item is the node just before the dummy tail.
-                lru_node = self.tail.prev
-                self._remove(lru_node)
-                del self.cache[lru_node.key]  # Remove from HashMap too!
+        cache.put(3, 300);
+        cache.display(); // [3:300 -> 2:200 -> 1:100]
+        // Cache is now FULL (3/3)
 
-            # Create a new node and add it to the front
-            new_node = Node(key, value)
-            self.cache[key] = new_node
-            self._add_to_front(new_node)
+        // Access key 1 — moves it to the front (most recent)
+        int value = cache.get(1);
+        System.out.println("\nget(1) = " + value);
+        cache.display(); // [1:100 -> 3:300 -> 2:200]
+        // Notice: 1 moved to front, 2 is now the LRU
 
-    def display(self):
-        """Print the cache contents from most recently used to least recently used."""
-        items = []
-        current = self.head.next
-        while current != self.tail:
-            items.append(f"{current.key}:{current.value}")
-            current = current.next
-        print(f"Cache ({len(self.cache)}/{self.capacity}): [{' -> '.join(items)}]")
-        print(f"  (Left = Most Recent, Right = Least Recent)")
+        // Put a new item (4) — cache is full, so LRU (key 2) gets evicted
+        cache.put(4, 400);
+        System.out.println("\nput(4, 400) — evicts key 2 (least recently used)");
+        cache.display(); // [4:400 -> 1:100 -> 3:300]
+        // Key 2 is GONE — it was the least recently used
 
+        // Try to get evicted key
+        value = cache.get(2);
+        System.out.println("\nget(2) = " + value); // -1 (not found — it was evicted!)
 
-# ============================================================
-# WALKTHROUGH — step by step
-# ============================================================
-
-cache = LRUCache(3)  # Capacity of 3
-
-# Put 3 items
-cache.put(1, 100)
-cache.display()  # [1:100]
-
-cache.put(2, 200)
-cache.display()  # [2:200 -> 1:100]
-
-cache.put(3, 300)
-cache.display()  # [3:300 -> 2:200 -> 1:100]
-# Cache is now FULL (3/3)
-
-# Access key 1 — moves it to the front (most recent)
-value = cache.get(1)
-print(f"\nget(1) = {value}")
-cache.display()  # [1:100 -> 3:300 -> 2:200]
-# Notice: 1 moved to front, 2 is now the LRU
-
-# Put a new item (4) — cache is full, so LRU (key 2) gets evicted
-cache.put(4, 400)
-print(f"\nput(4, 400) — evicts key 2 (least recently used)")
-cache.display()  # [4:400 -> 1:100 -> 3:300]
-# Key 2 is GONE — it was the least recently used
-
-# Try to get evicted key
-value = cache.get(2)
-print(f"\nget(2) = {value}")  # -1 (not found — it was evicted!)
-
-# Update existing key
-cache.put(3, 999)
-print(f"\nput(3, 999) — updates value and moves to front")
-cache.display()  # [3:999 -> 4:400 -> 1:100]
+        // Update existing key
+        cache.put(3, 999);
+        System.out.println("\nput(3, 999) — updates value and moves to front");
+        cache.display(); // [3:999 -> 4:400 -> 1:100]
+    }
+}
 ```
 
 ### Time and Space Complexity
@@ -782,297 +976,438 @@ Think about your local library (or a college library like IIT's). You go in, bro
 
 ### Full Code Solution
 
-```python
-from enum import Enum
-from datetime import datetime, timedelta
-from abc import ABC, abstractmethod
+```java
+import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
+import java.time.format.DateTimeFormatter;
+import java.util.*;
 
-class BookStatus(Enum):
-    AVAILABLE = "available"
-    BORROWED = "borrowed"
-    RESERVED = "reserved"
-    LOST = "lost"
+enum BookStatus {
+    AVAILABLE("available"),
+    BORROWED("borrowed"),
+    RESERVED("reserved"),
+    LOST("lost");
 
-class BookCategory(Enum):
-    FICTION = "Fiction"
-    NON_FICTION = "Non-Fiction"
-    SCIENCE = "Science"
-    TECHNOLOGY = "Technology"
-    HISTORY = "History"
+    private final String value;
+    BookStatus(String value) { this.value = value; }
+    public String getValue() { return value; }
+}
 
-# ============================================================
-# OBSERVER PATTERN — for waitlist notifications
-# When a popular book is returned, all members waiting for it
-# are automatically notified. Without Observer, the librarian
-# would have to manually check the waitlist and call each member.
-# ============================================================
+enum BookCategory {
+    FICTION("Fiction"),
+    NON_FICTION("Non-Fiction"),
+    SCIENCE("Science"),
+    TECHNOLOGY("Technology"),
+    HISTORY("History");
 
-class BookObserver(ABC):
-    """Any class that wants to be notified when a book becomes available."""
-    @abstractmethod
-    def on_book_available(self, book):
-        pass
+    private final String value;
+    BookCategory(String value) { this.value = value; }
+    public String getValue() { return value; }
+}
 
-class Book:
-    """
-    Represents a single copy of a book in the library.
-    Note: A library might have multiple COPIES of the same TITLE.
-    Each copy is a separate Book object with its own status.
-    """
-    def __init__(self, isbn: str, title: str, author: str,
-                 category: BookCategory, copy_number: int = 1):
-        self.isbn = isbn
-        self.title = title
-        self.author = author
-        self.category = category
-        self.copy_number = copy_number
-        self.status = BookStatus.AVAILABLE
-        self._waitlist = []  # Observer pattern — list of members waiting for this book
+// ============================================================
+// OBSERVER PATTERN — for waitlist notifications
+// When a popular book is returned, all members waiting for it
+// are automatically notified. Without Observer, the librarian
+// would have to manually check the waitlist and call each member.
+// ============================================================
 
-    def add_to_waitlist(self, observer: BookObserver):
-        """Subscribe a member to be notified when this book is available."""
-        if observer not in self._waitlist:
-            self._waitlist.append(observer)
-            print(f"  {observer.name} added to waitlist for '{self.title}'")
+/** Any class that wants to be notified when a book becomes available. */
+interface BookObserver {
+    void onBookAvailable(Book book);
+    String getName();
+}
 
-    def notify_waitlist(self):
-        """Notify all waiting members that this book is now available."""
-        for observer in self._waitlist:
-            observer.on_book_available(self)
-        self._waitlist.clear()
+/**
+ * Represents a single copy of a book in the library.
+ * Note: A library might have multiple COPIES of the same TITLE.
+ * Each copy is a separate Book object with its own status.
+ */
+class Book {
+    private String isbn;
+    private String title;
+    private String author;
+    private BookCategory category;
+    private int copyNumber;
+    private BookStatus status;
+    private List<BookObserver> waitlist; // Observer pattern — list of members waiting for this book
 
-    def __str__(self):
-        return f"'{self.title}' by {self.author} [{self.status.value}]"
+    public Book(String isbn, String title, String author, BookCategory category, int copyNumber) {
+        this.isbn = isbn;
+        this.title = title;
+        this.author = author;
+        this.category = category;
+        this.copyNumber = copyNumber;
+        this.status = BookStatus.AVAILABLE;
+        this.waitlist = new ArrayList<>();
+    }
 
-class BorrowRecord:
-    """
-    Tracks a single borrow transaction — who borrowed which book and when.
-    This is like the slip the librarian stamps with the due date.
-    """
-    def __init__(self, book: Book, member, borrow_date: datetime = None):
-        self.book = book
-        self.member = member
-        self.borrow_date = borrow_date or datetime.now()
-        self.due_date = self.borrow_date + timedelta(days=14)  # 2-week borrowing period
-        self.return_date = None
-        self.fine = 0.0
+    public Book(String isbn, String title, String author, BookCategory category) {
+        this(isbn, title, author, category, 1);
+    }
 
-    def calculate_fine(self, return_date: datetime = None) -> float:
-        """Calculate late return fine: Rs.5 per day after due date."""
-        actual_return = return_date or datetime.now()
-        if actual_return > self.due_date:
-            days_late = (actual_return - self.due_date).days
-            self.fine = days_late * 5  # Rs.5 per day
-        return self.fine
+    /** Subscribe a member to be notified when this book is available. */
+    public void addToWaitlist(BookObserver observer) {
+        if (!waitlist.contains(observer)) {
+            waitlist.add(observer);
+            System.out.println("  " + observer.getName() + " added to waitlist for '" + title + "'");
+        }
+    }
 
-    def __str__(self):
-        status = "RETURNED" if self.return_date else f"DUE: {self.due_date.strftime('%d-%b-%Y')}"
-        return f"'{self.book.title}' -> {self.member.name} ({status})"
+    /** Notify all waiting members that this book is now available. */
+    public void notifyWaitlist() {
+        for (BookObserver observer : waitlist) {
+            observer.onBookAvailable(this);
+        }
+        waitlist.clear();
+    }
 
-class Member(BookObserver):
-    """
-    A library member who can borrow and return books.
-    Also acts as an Observer — gets notified when waitlisted books become available.
-    """
-    MAX_BOOKS = 5  # Maximum books a member can borrow at once
+    public String getIsbn() { return isbn; }
+    public String getTitle() { return title; }
+    public String getAuthor() { return author; }
+    public BookCategory getCategory() { return category; }
+    public BookStatus getStatus() { return status; }
+    public void setStatus(BookStatus status) { this.status = status; }
 
-    def __init__(self, member_id: str, name: str, email: str):
-        self.member_id = member_id
-        self.name = name
-        self.email = email
-        self.borrowed_books = []     # List of BorrowRecords
-        self.borrow_history = []     # All past borrow records
-        self.total_fines = 0.0
+    @Override
+    public String toString() {
+        return "'" + title + "' by " + author + " [" + status.getValue() + "]";
+    }
+}
 
-    def can_borrow(self) -> bool:
-        """Check if member can borrow more books."""
-        active_borrows = [r for r in self.borrowed_books if r.return_date is None]
-        return len(active_borrows) < self.MAX_BOOKS
+/**
+ * Tracks a single borrow transaction — who borrowed which book and when.
+ * This is like the slip the librarian stamps with the due date.
+ */
+class BorrowRecord {
+    private Book book;
+    private Member member;
+    private LocalDateTime borrowDate;
+    private LocalDateTime dueDate;
+    private LocalDateTime returnDate;
+    private double fine;
 
-    def on_book_available(self, book):
-        """Observer callback — called when a waitlisted book is returned."""
-        print(f"  [NOTIFICATION] {self.name}: '{book.title}' is now available! Hurry to the library!")
+    public BorrowRecord(Book book, Member member, LocalDateTime borrowDate) {
+        this.book = book;
+        this.member = member;
+        this.borrowDate = (borrowDate != null) ? borrowDate : LocalDateTime.now();
+        this.dueDate = this.borrowDate.plusDays(14); // 2-week borrowing period
+        this.returnDate = null;
+        this.fine = 0.0;
+    }
 
-    def __str__(self):
-        active = len([r for r in self.borrowed_books if r.return_date is None])
-        return f"Member {self.name} ({active}/{self.MAX_BOOKS} books borrowed)"
+    public BorrowRecord(Book book, Member member) {
+        this(book, member, null);
+    }
 
-class Library:
-    """
-    The main library system — manages books, members, and borrowing.
-    This is the Facade that external code interacts with.
-    """
-    def __init__(self, name: str):
-        self.name = name
-        self.books = []        # All book copies in the library
-        self.members = {}      # member_id -> Member
+    /** Calculate late return fine: Rs.5 per day after due date. */
+    public double calculateFine(LocalDateTime returnDate) {
+        LocalDateTime actualReturn = (returnDate != null) ? returnDate : LocalDateTime.now();
+        if (actualReturn.isAfter(dueDate)) {
+            long daysLate = ChronoUnit.DAYS.between(dueDate, actualReturn);
+            this.fine = daysLate * 5; // Rs.5 per day
+        }
+        return this.fine;
+    }
 
-    def add_book(self, book: Book):
-        """Add a book copy to the library's collection."""
-        self.books.append(book)
+    public Book getBook() { return book; }
+    public Member getMember() { return member; }
+    public LocalDateTime getDueDate() { return dueDate; }
+    public LocalDateTime getReturnDate() { return returnDate; }
+    public void setReturnDate(LocalDateTime returnDate) { this.returnDate = returnDate; }
+    public double getFine() { return fine; }
 
-    def register_member(self, member: Member):
-        """Register a new library member."""
-        self.members[member.member_id] = member
-        print(f"Registered: {member.name} ({member.member_id})")
+    @Override
+    public String toString() {
+        DateTimeFormatter fmt = DateTimeFormatter.ofPattern("dd-MMM-yyyy");
+        String status = (returnDate != null) ? "RETURNED" : "DUE: " + dueDate.format(fmt);
+        return "'" + book.getTitle() + "' -> " + member.getName() + " (" + status + ")";
+    }
+}
 
-    def search_by_title(self, title: str) -> list:
-        """Search for books by title (case-insensitive partial match)."""
-        return [b for b in self.books if title.lower() in b.title.lower()]
+/**
+ * A library member who can borrow and return books.
+ * Also acts as an Observer — gets notified when waitlisted books become available.
+ */
+class Member implements BookObserver {
+    public static final int MAX_BOOKS = 5; // Maximum books a member can borrow at once
 
-    def search_by_author(self, author: str) -> list:
-        """Search for books by author name."""
-        return [b for b in self.books if author.lower() in b.author.lower()]
+    private String memberId;
+    private String name;
+    private String email;
+    private List<BorrowRecord> borrowedBooks;    // List of BorrowRecords
+    private List<BorrowRecord> borrowHistory;    // All past borrow records
+    private double totalFines;
 
-    def search_by_category(self, category: BookCategory) -> list:
-        """Search for books by category."""
-        return [b for b in self.books if b.category == category]
+    public Member(String memberId, String name, String email) {
+        this.memberId = memberId;
+        this.name = name;
+        this.email = email;
+        this.borrowedBooks = new ArrayList<>();
+        this.borrowHistory = new ArrayList<>();
+        this.totalFines = 0.0;
+    }
 
-    def search_available(self, title: str) -> Book:
-        """Find an available copy of a book by title."""
-        matches = self.search_by_title(title)
-        for book in matches:
-            if book.status == BookStatus.AVAILABLE:
-                return book
-        return None
+    /** Check if member can borrow more books. */
+    public boolean canBorrow() {
+        long activeBorrows = borrowedBooks.stream()
+                .filter(r -> r.getReturnDate() == null)
+                .count();
+        return activeBorrows < MAX_BOOKS;
+    }
 
-    def borrow_book(self, member_id: str, title: str,
-                    borrow_date: datetime = None) -> BorrowRecord:
-        """
-        A member borrows a book. The core transaction of the library.
-        """
-        # Validate member
-        member = self.members.get(member_id)
-        if not member:
-            print(f"Member {member_id} not found!")
-            return None
+    /** Observer callback — called when a waitlisted book is returned. */
+    @Override
+    public void onBookAvailable(Book book) {
+        System.out.println("  [NOTIFICATION] " + name + ": '" + book.getTitle()
+                + "' is now available! Hurry to the library!");
+    }
 
-        # Check if member can borrow
-        if not member.can_borrow():
-            print(f"{member.name} has reached the maximum borrowing limit ({Member.MAX_BOOKS} books)!")
-            return None
+    @Override
+    public String getName() { return name; }
+    public String getMemberId() { return memberId; }
+    public List<BorrowRecord> getBorrowedBooks() { return borrowedBooks; }
+    public List<BorrowRecord> getBorrowHistory() { return borrowHistory; }
+    public double getTotalFines() { return totalFines; }
+    public void addFine(double fine) { this.totalFines += fine; }
 
-        # Find an available copy
-        book = self.search_available(title)
-        if not book:
-            print(f"No available copy of '{title}' found.")
-            # Offer to add to waitlist
-            all_copies = self.search_by_title(title)
-            if all_copies:
-                print(f"  All {len(all_copies)} copies are currently borrowed.")
-                all_copies[0].add_to_waitlist(member)
-            return None
+    @Override
+    public String toString() {
+        long active = borrowedBooks.stream().filter(r -> r.getReturnDate() == null).count();
+        return "Member " + name + " (" + active + "/" + MAX_BOOKS + " books borrowed)";
+    }
+}
 
-        # Create the borrow record
-        record = BorrowRecord(book, member, borrow_date)
-        book.status = BookStatus.BORROWED
-        member.borrowed_books.append(record)
+/**
+ * The main library system — manages books, members, and borrowing.
+ * This is the Facade that external code interacts with.
+ */
+class Library {
+    private String name;
+    private List<Book> books;          // All book copies in the library
+    private Map<String, Member> members; // memberId -> Member
 
-        print(f"{member.name} borrowed '{book.title}'")
-        print(f"  Due date: {record.due_date.strftime('%d-%b-%Y')}")
-        return record
+    public Library(String name) {
+        this.name = name;
+        this.books = new ArrayList<>();
+        this.members = new HashMap<>();
+    }
 
-    def return_book(self, member_id: str, title: str,
-                    return_date: datetime = None) -> float:
-        """
-        A member returns a book. Calculates fine if late.
-        Notifies waitlisted members if any.
-        """
-        member = self.members.get(member_id)
-        if not member:
-            print(f"Member {member_id} not found!")
-            return 0
+    /** Add a book copy to the library's collection. */
+    public void addBook(Book book) {
+        books.add(book);
+    }
 
-        # Find the active borrow record for this book
-        record = None
-        for r in member.borrowed_books:
-            if r.book.title.lower() == title.lower() and r.return_date is None:
-                record = r
-                break
+    /** Register a new library member. */
+    public void registerMember(Member member) {
+        members.put(member.getMemberId(), member);
+        System.out.println("Registered: " + member.getName() + " (" + member.getMemberId() + ")");
+    }
 
-        if not record:
-            print(f"{member.name} does not have '{title}' borrowed!")
-            return 0
+    /** Search for books by title (case-insensitive partial match). */
+    public List<Book> searchByTitle(String title) {
+        List<Book> results = new ArrayList<>();
+        for (Book b : books) {
+            if (b.getTitle().toLowerCase().contains(title.toLowerCase())) {
+                results.add(b);
+            }
+        }
+        return results;
+    }
 
-        # Process the return
-        actual_return = return_date or datetime.now()
-        record.return_date = actual_return
-        fine = record.calculate_fine(actual_return)
-        member.total_fines += fine
+    /** Search for books by author name. */
+    public List<Book> searchByAuthor(String author) {
+        List<Book> results = new ArrayList<>();
+        for (Book b : books) {
+            if (b.getAuthor().toLowerCase().contains(author.toLowerCase())) {
+                results.add(b);
+            }
+        }
+        return results;
+    }
 
-        # Make the book available again
-        record.book.status = BookStatus.AVAILABLE
+    /** Search for books by category. */
+    public List<Book> searchByCategory(BookCategory category) {
+        List<Book> results = new ArrayList<>();
+        for (Book b : books) {
+            if (b.getCategory() == category) {
+                results.add(b);
+            }
+        }
+        return results;
+    }
 
-        print(f"{member.name} returned '{record.book.title}'")
-        if fine > 0:
-            days_late = (actual_return - record.due_date).days
-            print(f"  Late by {days_late} days. Fine: Rs.{fine:.0f}")
-        else:
-            print(f"  Returned on time. No fine.")
+    /** Find an available copy of a book by title. */
+    public Book searchAvailable(String title) {
+        List<Book> matches = searchByTitle(title);
+        for (Book book : matches) {
+            if (book.getStatus() == BookStatus.AVAILABLE) {
+                return book;
+            }
+        }
+        return null;
+    }
 
-        # Notify waitlisted members (Observer pattern in action!)
-        record.book.notify_waitlist()
+    /**
+     * A member borrows a book. The core transaction of the library.
+     */
+    public BorrowRecord borrowBook(String memberId, String title, LocalDateTime borrowDate) {
+        // Validate member
+        Member member = members.get(memberId);
+        if (member == null) {
+            System.out.println("Member " + memberId + " not found!");
+            return null;
+        }
 
-        # Move to history
-        member.borrow_history.append(record)
+        // Check if member can borrow
+        if (!member.canBorrow()) {
+            System.out.println(member.getName() + " has reached the maximum borrowing limit ("
+                    + Member.MAX_BOOKS + " books)!");
+            return null;
+        }
 
-        return fine
+        // Find an available copy
+        Book book = searchAvailable(title);
+        if (book == null) {
+            System.out.println("No available copy of '" + title + "' found.");
+            // Offer to add to waitlist
+            List<Book> allCopies = searchByTitle(title);
+            if (!allCopies.isEmpty()) {
+                System.out.println("  All " + allCopies.size() + " copies are currently borrowed.");
+                allCopies.get(0).addToWaitlist(member);
+            }
+            return null;
+        }
 
+        // Create the borrow record
+        BorrowRecord record = new BorrowRecord(book, member, borrowDate);
+        book.setStatus(BookStatus.BORROWED);
+        member.getBorrowedBooks().add(record);
 
-# ============================================================
-# TEST THE SYSTEM
-# ============================================================
+        DateTimeFormatter fmt = DateTimeFormatter.ofPattern("dd-MMM-yyyy");
+        System.out.println(member.getName() + " borrowed '" + book.getTitle() + "'");
+        System.out.println("  Due date: " + record.getDueDate().format(fmt));
+        return record;
+    }
 
-# Create the library
-library = Library("Central Library, IIT Bombay")
+    public BorrowRecord borrowBook(String memberId, String title) {
+        return borrowBook(memberId, title, null);
+    }
 
-# Add books
-library.add_book(Book("978-0-13-468599-1", "Clean Code", "Robert C. Martin",
-                       BookCategory.TECHNOLOGY))
-library.add_book(Book("978-0-13-468599-1", "Clean Code", "Robert C. Martin",
-                       BookCategory.TECHNOLOGY, copy_number=2))
-library.add_book(Book("978-0-06-112008-4", "To Kill a Mockingbird", "Harper Lee",
-                       BookCategory.FICTION))
-library.add_book(Book("978-0-07-013151-4", "The C Programming Language", "Kernighan & Ritchie",
-                       BookCategory.TECHNOLOGY))
+    /**
+     * A member returns a book. Calculates fine if late.
+     * Notifies waitlisted members if any.
+     */
+    public double returnBook(String memberId, String title, LocalDateTime returnDate) {
+        Member member = members.get(memberId);
+        if (member == null) {
+            System.out.println("Member " + memberId + " not found!");
+            return 0;
+        }
 
-# Register members
-sheetal = Member("M001", "Sheetal", "sheetal@example.com")
-rahul = Member("M002", "Rahul", "rahul@example.com")
-library.register_member(sheetal)
-library.register_member(rahul)
+        // Find the active borrow record for this book
+        BorrowRecord record = null;
+        for (BorrowRecord r : member.getBorrowedBooks()) {
+            if (r.getBook().getTitle().equalsIgnoreCase(title) && r.getReturnDate() == null) {
+                record = r;
+                break;
+            }
+        }
 
-# Sheetal borrows Clean Code
-library.borrow_book("M001", "Clean Code")
-# Sheetal borrowed 'Clean Code'. Due: 17-Jun-2026
+        if (record == null) {
+            System.out.println(member.getName() + " does not have '" + title + "' borrowed!");
+            return 0;
+        }
 
-# Rahul also wants Clean Code — borrows the second copy
-library.borrow_book("M002", "Clean Code")
-# Rahul borrowed 'Clean Code'. Due: 17-Jun-2026
+        // Process the return
+        LocalDateTime actualReturn = (returnDate != null) ? returnDate : LocalDateTime.now();
+        record.setReturnDate(actualReturn);
+        double fine = record.calculateFine(actualReturn);
+        member.addFine(fine);
 
-# A third person wants Clean Code — but both copies are borrowed!
-priya = Member("M003", "Priya", "priya@example.com")
-library.register_member(priya)
-library.borrow_book("M003", "Clean Code")
-# No available copy. Priya added to waitlist.
+        // Make the book available again
+        record.getBook().setStatus(BookStatus.AVAILABLE);
 
-# Sheetal returns Clean Code (on time)
-library.return_book("M001", "Clean Code")
-# Sheetal returned 'Clean Code'. No fine.
-# [NOTIFICATION] Priya: 'Clean Code' is now available! Hurry to the library!
+        System.out.println(member.getName() + " returned '" + record.getBook().getTitle() + "'");
+        if (fine > 0) {
+            long daysLate = ChronoUnit.DAYS.between(record.getDueDate(), actualReturn);
+            System.out.printf("  Late by %d days. Fine: Rs.%.0f%n", daysLate, fine);
+        } else {
+            System.out.println("  Returned on time. No fine.");
+        }
 
-# Rahul returns Clean Code LATE (5 days late)
-late_return = datetime.now() + timedelta(days=19)  # 19 days (5 days late)
-library.return_book("M002", "Clean Code", late_return)
-# Rahul returned 'Clean Code'. Late by 5 days. Fine: Rs.25
+        // Notify waitlisted members (Observer pattern in action!)
+        record.getBook().notifyWaitlist();
+
+        // Move to history
+        member.getBorrowHistory().add(record);
+
+        return fine;
+    }
+
+    public double returnBook(String memberId, String title) {
+        return returnBook(memberId, title, null);
+    }
+}
+
+// ============================================================
+// TEST THE SYSTEM
+// ============================================================
+
+class LibraryDemo {
+    public static void main(String[] args) {
+        // Create the library
+        Library library = new Library("Central Library, IIT Bombay");
+
+        // Add books
+        library.addBook(new Book("978-0-13-468599-1", "Clean Code", "Robert C. Martin",
+                BookCategory.TECHNOLOGY));
+        library.addBook(new Book("978-0-13-468599-1", "Clean Code", "Robert C. Martin",
+                BookCategory.TECHNOLOGY, 2));
+        library.addBook(new Book("978-0-06-112008-4", "To Kill a Mockingbird", "Harper Lee",
+                BookCategory.FICTION));
+        library.addBook(new Book("978-0-07-013151-4", "The C Programming Language", "Kernighan & Ritchie",
+                BookCategory.TECHNOLOGY));
+
+        // Register members
+        Member sheetal = new Member("M001", "Sheetal", "sheetal@example.com");
+        Member rahul = new Member("M002", "Rahul", "rahul@example.com");
+        library.registerMember(sheetal);
+        library.registerMember(rahul);
+
+        // Sheetal borrows Clean Code
+        library.borrowBook("M001", "Clean Code");
+        // Sheetal borrowed 'Clean Code'. Due: 17-Jun-2026
+
+        // Rahul also wants Clean Code — borrows the second copy
+        library.borrowBook("M002", "Clean Code");
+        // Rahul borrowed 'Clean Code'. Due: 17-Jun-2026
+
+        // A third person wants Clean Code — but both copies are borrowed!
+        Member priya = new Member("M003", "Priya", "priya@example.com");
+        library.registerMember(priya);
+        library.borrowBook("M003", "Clean Code");
+        // No available copy. Priya added to waitlist.
+
+        // Sheetal returns Clean Code (on time)
+        library.returnBook("M001", "Clean Code");
+        // Sheetal returned 'Clean Code'. No fine.
+        // [NOTIFICATION] Priya: 'Clean Code' is now available! Hurry to the library!
+
+        // Rahul returns Clean Code LATE (5 days late)
+        LocalDateTime lateReturn = LocalDateTime.now().plusDays(19); // 19 days (5 days late)
+        library.returnBook("M002", "Clean Code", lateReturn);
+        // Rahul returned 'Clean Code'. Late by 5 days. Fine: Rs.25
+    }
+}
 ```
 
 ### Design Patterns Used
 
 | Pattern | Where | Why |
 |---------|-------|-----|
-| **Observer** | `Book._waitlist` and `Member.on_book_available()` | When a popular book is returned, all waitlisted members are automatically notified without the library having to manually track who wants which book. |
-| **Facade** | `Library` class | Provides a simple interface (`borrow_book`, `return_book`, `search`) hiding the complexity of managing books, members, records, and notifications. |
+| **Observer** | `Book.waitlist` and `Member.onBookAvailable()` | When a popular book is returned, all waitlisted members are automatically notified without the library having to manually track who wants which book. |
+| **Facade** | `Library` class | Provides a simple interface (`borrowBook`, `returnBook`, `search`) hiding the complexity of managing books, members, records, and notifications. |
 | **Strategy** (extension) | Fine calculation could use different strategies | Flat fine vs. tiered fine (Rs.5/day for first week, Rs.10/day after) vs. percentage of book value. |
 
 ---
@@ -1096,325 +1431,429 @@ You go on a trip to Goa with 4 friends. One person pays for the hotel (Rs.12,000
 
 ### Full Code Solution
 
-```python
-from enum import Enum
-from datetime import datetime
-from abc import ABC, abstractmethod
+```java
+import java.time.LocalDateTime;
+import java.util.*;
 
-class SplitType(Enum):
-    EQUAL = "equal"
-    EXACT = "exact"
-    PERCENTAGE = "percentage"
+enum SplitType {
+    EQUAL("equal"),
+    EXACT("exact"),
+    PERCENTAGE("percentage");
 
-# ============================================================
-# STRATEGY PATTERN — Different ways to split an expense
-# Why Strategy? Because the splitting algorithm varies by type,
-# and we might add new types later (e.g., by shares, by weight)
-# ============================================================
-
-class SplitStrategy(ABC):
-    @abstractmethod
-    def calculate_splits(self, total_amount: float, participants: list,
-                         split_details: dict = None) -> dict:
-        """
-        Returns a dict of {user_id: amount_owed} for each participant.
-        The amounts should sum to total_amount.
-        """
-        pass
-
-class EqualSplitStrategy(SplitStrategy):
-    """Split equally among all participants."""
-    def calculate_splits(self, total_amount, participants, split_details=None):
-        per_person = round(total_amount / len(participants), 2)
-        # Handle rounding — give the remainder to the first person
-        splits = {p: per_person for p in participants}
-        remainder = round(total_amount - (per_person * len(participants)), 2)
-        if remainder != 0:
-            splits[participants[0]] = round(splits[participants[0]] + remainder, 2)
-        return splits
-
-class ExactSplitStrategy(SplitStrategy):
-    """Each participant pays an exact specified amount."""
-    def calculate_splits(self, total_amount, participants, split_details=None):
-        if not split_details:
-            raise ValueError("Exact split requires split_details {user_id: amount}")
-        # Validate that amounts sum to total
-        total_specified = sum(split_details.values())
-        if abs(total_specified - total_amount) > 0.01:
-            raise ValueError(
-                f"Specified amounts ({total_specified}) do not sum to total ({total_amount})")
-        return split_details
-
-class PercentageSplitStrategy(SplitStrategy):
-    """Each participant pays a specified percentage."""
-    def calculate_splits(self, total_amount, participants, split_details=None):
-        if not split_details:
-            raise ValueError("Percentage split requires split_details {user_id: percentage}")
-        # Validate percentages sum to 100
-        total_pct = sum(split_details.values())
-        if abs(total_pct - 100) > 0.01:
-            raise ValueError(f"Percentages must sum to 100, got {total_pct}")
-        return {user: round(total_amount * pct / 100, 2)
-                for user, pct in split_details.items()}
-
-# Factory for creating the right strategy
-SPLIT_STRATEGIES = {
-    SplitType.EQUAL: EqualSplitStrategy(),
-    SplitType.EXACT: ExactSplitStrategy(),
-    SplitType.PERCENTAGE: PercentageSplitStrategy(),
+    private final String value;
+    SplitType(String value) { this.value = value; }
+    public String getValue() { return value; }
 }
 
-# ============================================================
-# CORE CLASSES
-# ============================================================
+// ============================================================
+// STRATEGY PATTERN — Different ways to split an expense
+// Why Strategy? Because the splitting algorithm varies by type,
+// and we might add new types later (e.g., by shares, by weight)
+// ============================================================
 
-class User:
-    def __init__(self, user_id: str, name: str, phone: str = ""):
-        self.user_id = user_id
-        self.name = name
-        self.phone = phone
+abstract class SplitStrategy {
+    /**
+     * Returns a map of {userId: amountOwed} for each participant.
+     * The amounts should sum to totalAmount.
+     */
+    public abstract Map<String, Double> calculateSplits(double totalAmount,
+            List<String> participants, Map<String, Double> splitDetails);
+}
 
-    def __str__(self):
-        return self.name
+/** Split equally among all participants. */
+class EqualSplitStrategy extends SplitStrategy {
+    @Override
+    public Map<String, Double> calculateSplits(double totalAmount,
+            List<String> participants, Map<String, Double> splitDetails) {
+        double perPerson = Math.round(totalAmount / participants.size() * 100.0) / 100.0;
+        Map<String, Double> splits = new LinkedHashMap<>();
+        for (String p : participants) {
+            splits.put(p, perPerson);
+        }
+        // Handle rounding — give the remainder to the first person
+        double remainder = Math.round((totalAmount - (perPerson * participants.size())) * 100.0) / 100.0;
+        if (remainder != 0) {
+            splits.put(participants.get(0),
+                    Math.round((splits.get(participants.get(0)) + remainder) * 100.0) / 100.0);
+        }
+        return splits;
+    }
+}
 
-class Expense:
-    """
-    A single expense — someone paid for something, and it is split among members.
-    Example: Rahul paid Rs.3000 for the cab, split equally among 4 friends.
-    """
-    _counter = 0
+/** Each participant pays an exact specified amount. */
+class ExactSplitStrategy extends SplitStrategy {
+    @Override
+    public Map<String, Double> calculateSplits(double totalAmount,
+            List<String> participants, Map<String, Double> splitDetails) {
+        if (splitDetails == null || splitDetails.isEmpty()) {
+            throw new IllegalArgumentException("Exact split requires splitDetails {userId: amount}");
+        }
+        // Validate that amounts sum to total
+        double totalSpecified = splitDetails.values().stream().mapToDouble(Double::doubleValue).sum();
+        if (Math.abs(totalSpecified - totalAmount) > 0.01) {
+            throw new IllegalArgumentException(
+                    "Specified amounts (" + totalSpecified + ") do not sum to total (" + totalAmount + ")");
+        }
+        return splitDetails;
+    }
+}
 
-    def __init__(self, description: str, total_amount: float,
-                 paid_by: User, split_type: SplitType,
-                 participants: list, split_details: dict = None):
-        Expense._counter += 1
-        self.expense_id = f"EXP-{Expense._counter:04d}"
-        self.description = description
-        self.total_amount = total_amount
-        self.paid_by = paid_by
-        self.split_type = split_type
-        self.created_at = datetime.now()
+/** Each participant pays a specified percentage. */
+class PercentageSplitStrategy extends SplitStrategy {
+    @Override
+    public Map<String, Double> calculateSplits(double totalAmount,
+            List<String> participants, Map<String, Double> splitDetails) {
+        if (splitDetails == null || splitDetails.isEmpty()) {
+            throw new IllegalArgumentException("Percentage split requires splitDetails {userId: percentage}");
+        }
+        // Validate percentages sum to 100
+        double totalPct = splitDetails.values().stream().mapToDouble(Double::doubleValue).sum();
+        if (Math.abs(totalPct - 100) > 0.01) {
+            throw new IllegalArgumentException("Percentages must sum to 100, got " + totalPct);
+        }
+        Map<String, Double> result = new LinkedHashMap<>();
+        for (Map.Entry<String, Double> entry : splitDetails.entrySet()) {
+            result.put(entry.getKey(), Math.round(totalAmount * entry.getValue() / 100.0 * 100.0) / 100.0);
+        }
+        return result;
+    }
+}
 
-        # Use Strategy pattern to calculate how much each person owes
-        strategy = SPLIT_STRATEGIES[split_type]
-        participant_ids = [p.user_id for p in participants]
-        self.splits = strategy.calculate_splits(
-            total_amount, participant_ids, split_details
-        )
-        # Store participant objects for display
-        self._participants = {p.user_id: p for p in participants}
+// ============================================================
+// CORE CLASSES
+// ============================================================
 
-    def display(self):
-        print(f"\n  {self.expense_id}: {self.description}")
-        print(f"  Total: Rs.{self.total_amount:.2f} | Paid by: {self.paid_by.name}")
-        print(f"  Split ({self.split_type.value}):")
-        for user_id, amount in self.splits.items():
-            name = self._participants.get(user_id, user_id)
-            print(f"    {name}: Rs.{amount:.2f}")
+class User {
+    private String userId;
+    private String name;
+    private String phone;
 
-class Group:
-    """
-    A group of people who share expenses.
-    Example: "Goa Trip 2026" with 4 friends.
-    """
-    def __init__(self, group_id: str, name: str, created_by: User):
-        self.group_id = group_id
-        self.name = name
-        self.created_by = created_by
-        self.members = {}      # user_id -> User
-        self.expenses = []     # List of Expense objects
-        self.settlements = []  # List of (from_user, to_user, amount) tuples
+    public User(String userId, String name, String phone) {
+        this.userId = userId;
+        this.name = name;
+        this.phone = phone;
+    }
 
-        # Add creator as first member
-        self.add_member(created_by)
+    public String getUserId() { return userId; }
+    public String getName() { return name; }
 
-    def add_member(self, user: User):
-        self.members[user.user_id] = user
-        print(f"  {user.name} joined group '{self.name}'")
+    @Override
+    public String toString() { return name; }
+}
 
-    def add_expense(self, description: str, total_amount: float,
-                    paid_by: User, split_type: SplitType = SplitType.EQUAL,
-                    participants: list = None, split_details: dict = None):
-        """
-        Add an expense to the group.
-        If participants not specified, splits among ALL group members.
-        """
-        if participants is None:
-            participants = list(self.members.values())
+/**
+ * A single expense — someone paid for something, and it is split among members.
+ * Example: Rahul paid Rs.3000 for the cab, split equally among 4 friends.
+ */
+class Expense {
+    private static int counter = 0;
 
-        expense = Expense(description, total_amount, paid_by,
-                         split_type, participants, split_details)
-        self.expenses.append(expense)
-        expense.display()
-        return expense
+    // Factory for creating the right strategy
+    private static final Map<SplitType, SplitStrategy> SPLIT_STRATEGIES = new HashMap<>();
+    static {
+        SPLIT_STRATEGIES.put(SplitType.EQUAL, new EqualSplitStrategy());
+        SPLIT_STRATEGIES.put(SplitType.EXACT, new ExactSplitStrategy());
+        SPLIT_STRATEGIES.put(SplitType.PERCENTAGE, new PercentageSplitStrategy());
+    }
 
-    def get_balances(self) -> dict:
-        """
-        Calculate net balance for each member.
-        Positive = others owe you money (you overpaid)
-        Negative = you owe money (you underpaid)
+    private String expenseId;
+    private String description;
+    private double totalAmount;
+    private User paidBy;
+    private SplitType splitType;
+    private LocalDateTime createdAt;
+    private Map<String, Double> splits;
+    private Map<String, User> participants;
 
-        Example:
-          Rahul paid Rs.3000 for 4 people (Rs.750 each)
-          Rahul's balance: +2250 (he paid 3000 but his share was only 750)
-          Each other person's balance: -750 (they owe their share)
-        """
-        balances = {uid: 0.0 for uid in self.members}
+    public Expense(String description, double totalAmount, User paidBy,
+                   SplitType splitType, List<User> participantList,
+                   Map<String, Double> splitDetails) {
+        counter++;
+        this.expenseId = String.format("EXP-%04d", counter);
+        this.description = description;
+        this.totalAmount = totalAmount;
+        this.paidBy = paidBy;
+        this.splitType = splitType;
+        this.createdAt = LocalDateTime.now();
 
-        for expense in self.expenses:
-            # The payer PAID the full amount (positive)
-            payer_id = expense.paid_by.user_id
-            balances[payer_id] += expense.total_amount
+        // Use Strategy pattern to calculate how much each person owes
+        SplitStrategy strategy = SPLIT_STRATEGIES.get(splitType);
+        List<String> participantIds = new ArrayList<>();
+        this.participants = new LinkedHashMap<>();
+        for (User p : participantList) {
+            participantIds.add(p.getUserId());
+            this.participants.put(p.getUserId(), p);
+        }
+        this.splits = strategy.calculateSplits(totalAmount, participantIds, splitDetails);
+    }
 
-            # Each participant OWES their split amount (negative)
-            for user_id, amount in expense.splits.items():
-                balances[user_id] -= amount
+    public void display() {
+        System.out.println("\n  " + expenseId + ": " + description);
+        System.out.printf("  Total: Rs.%.2f | Paid by: %s%n", totalAmount, paidBy.getName());
+        System.out.println("  Split (" + splitType.getValue() + "):");
+        for (Map.Entry<String, Double> entry : splits.entrySet()) {
+            String name = participants.containsKey(entry.getKey())
+                    ? participants.get(entry.getKey()).getName() : entry.getKey();
+            System.out.printf("    %s: Rs.%.2f%n", name, entry.getValue());
+        }
+    }
 
-        # Account for settlements
-        for from_id, to_id, amount in self.settlements:
-            balances[from_id] += amount   # Payer reduces their debt
-            balances[to_id] -= amount     # Receiver's credit decreases
+    public double getTotalAmount() { return totalAmount; }
+    public User getPaidBy() { return paidBy; }
+    public Map<String, Double> getSplits() { return splits; }
+}
 
-        # Round to avoid floating point artifacts
-        return {uid: round(bal, 2) for uid, bal in balances.items()}
+/**
+ * A group of people who share expenses.
+ * Example: "Goa Trip 2026" with 4 friends.
+ */
+class Group {
+    private String groupId;
+    private String name;
+    private User createdBy;
+    private Map<String, User> members;       // userId -> User
+    private List<Expense> expenses;          // List of Expense objects
+    private List<double[]> settlements;      // List of [fromIndex, toIndex, amount] — using String arrays instead
+    private List<String[]> settlementData;   // List of {fromUserId, toUserId, amount}
 
-    def get_simplified_debts(self) -> list:
-        """
-        Calculate the MINIMUM number of transactions needed to settle all debts.
+    public Group(String groupId, String name, User createdBy) {
+        this.groupId = groupId;
+        this.name = name;
+        this.createdBy = createdBy;
+        this.members = new LinkedHashMap<>();
+        this.expenses = new ArrayList<>();
+        this.settlementData = new ArrayList<>();
 
-        Algorithm (greedy):
-        1. Calculate net balance for each person
-        2. Separate into creditors (positive balance) and debtors (negative balance)
-        3. Match the biggest debtor with the biggest creditor
-        4. Transfer the minimum of the two amounts
-        5. Repeat until all balances are zero
+        // Add creator as first member
+        addMember(createdBy);
+    }
 
-        This minimizes the number of transactions.
-        Example: If A owes B Rs.100 and B owes C Rs.100,
-        instead of two transactions, just A pays C Rs.100 directly.
-        """
-        balances = self.get_balances()
+    public void addMember(User user) {
+        members.put(user.getUserId(), user);
+        System.out.println("  " + user.getName() + " joined group '" + name + "'");
+    }
 
-        # Separate into creditors (owed money) and debtors (owe money)
-        creditors = []  # (user_id, amount) — positive balances
-        debtors = []    # (user_id, amount) — negative balances
+    /**
+     * Add an expense to the group.
+     * If participants not specified, splits among ALL group members.
+     */
+    public Expense addExpense(String description, double totalAmount, User paidBy,
+                              SplitType splitType, List<User> participants,
+                              Map<String, Double> splitDetails) {
+        if (participants == null) {
+            participants = new ArrayList<>(members.values());
+        }
+        Expense expense = new Expense(description, totalAmount, paidBy,
+                splitType, participants, splitDetails);
+        expenses.add(expense);
+        expense.display();
+        return expense;
+    }
 
-        for uid, balance in balances.items():
-            if balance > 0.01:
-                creditors.append([uid, balance])
-            elif balance < -0.01:
-                debtors.append([uid, -balance])  # Store as positive for easier math
+    public Expense addExpense(String description, double totalAmount, User paidBy) {
+        return addExpense(description, totalAmount, paidBy, SplitType.EQUAL, null, null);
+    }
 
-        # Sort both by amount (descending) for greedy matching
-        creditors.sort(key=lambda x: x[1], reverse=True)
-        debtors.sort(key=lambda x: x[1], reverse=True)
+    /**
+     * Calculate net balance for each member.
+     * Positive = others owe you money (you overpaid)
+     * Negative = you owe money (you underpaid)
+     *
+     * Example:
+     *   Rahul paid Rs.3000 for 4 people (Rs.750 each)
+     *   Rahul's balance: +2250 (he paid 3000 but his share was only 750)
+     *   Each other person's balance: -750 (they owe their share)
+     */
+    public Map<String, Double> getBalances() {
+        Map<String, Double> balances = new LinkedHashMap<>();
+        for (String uid : members.keySet()) {
+            balances.put(uid, 0.0);
+        }
 
-        transactions = []
-        i, j = 0, 0
-        while i < len(debtors) and j < len(creditors):
-            debtor_id, debt = debtors[i]
-            creditor_id, credit = creditors[j]
+        for (Expense expense : expenses) {
+            // The payer PAID the full amount (positive)
+            String payerId = expense.getPaidBy().getUserId();
+            balances.put(payerId, balances.getOrDefault(payerId, 0.0) + expense.getTotalAmount());
 
-            # Transfer the smaller of the two amounts
-            transfer = min(debt, credit)
-            transactions.append((debtor_id, creditor_id, round(transfer, 2)))
+            // Each participant OWES their split amount (negative)
+            for (Map.Entry<String, Double> entry : expense.getSplits().entrySet()) {
+                balances.put(entry.getKey(),
+                        balances.getOrDefault(entry.getKey(), 0.0) - entry.getValue());
+            }
+        }
 
-            # Update remaining balances
-            debtors[i][1] -= transfer
-            creditors[j][1] -= transfer
+        // Account for settlements
+        for (String[] s : settlementData) {
+            String fromId = s[0];
+            String toId = s[1];
+            double amount = Double.parseDouble(s[2]);
+            balances.put(fromId, balances.get(fromId) + amount);  // Payer reduces their debt
+            balances.put(toId, balances.get(toId) - amount);      // Receiver's credit decreases
+        }
 
-            # Move to next debtor/creditor if settled
-            if debtors[i][1] < 0.01:
-                i += 1
-            if creditors[j][1] < 0.01:
-                j += 1
+        // Round to avoid floating point artifacts
+        Map<String, Double> rounded = new LinkedHashMap<>();
+        for (Map.Entry<String, Double> entry : balances.entrySet()) {
+            rounded.put(entry.getKey(), Math.round(entry.getValue() * 100.0) / 100.0);
+        }
+        return rounded;
+    }
 
-        return transactions
+    /**
+     * Calculate the MINIMUM number of transactions needed to settle all debts.
+     *
+     * Algorithm (greedy):
+     * 1. Calculate net balance for each person
+     * 2. Separate into creditors (positive balance) and debtors (negative balance)
+     * 3. Match the biggest debtor with the biggest creditor
+     * 4. Transfer the minimum of the two amounts
+     * 5. Repeat until all balances are zero
+     *
+     * This minimizes the number of transactions.
+     * Example: If A owes B Rs.100 and B owes C Rs.100,
+     * instead of two transactions, just A pays C Rs.100 directly.
+     */
+    public List<String[]> getSimplifiedDebts() {
+        Map<String, Double> balances = getBalances();
 
-    def settle(self, from_user_id: str, to_user_id: str, amount: float):
-        """Record a settlement (payment) between two members."""
-        self.settlements.append((from_user_id, to_user_id, amount))
-        from_name = self.members[from_user_id].name
-        to_name = self.members[to_user_id].name
-        print(f"  Settlement: {from_name} paid Rs.{amount:.2f} to {to_name}")
+        // Separate into creditors (owed money) and debtors (owe money)
+        List<Object[]> creditors = new ArrayList<>(); // {userId, amount} — positive balances
+        List<Object[]> debtors = new ArrayList<>();   // {userId, amount} — negative balances
 
-    def show_balances(self):
-        """Display who owes what."""
-        balances = self.get_balances()
-        print(f"\n{'=' * 50}")
-        print(f"  Balances for '{self.name}'")
-        print(f"{'=' * 50}")
-        for uid, balance in balances.items():
-            name = self.members[uid].name
-            if balance > 0.01:
-                print(f"  {name}: +Rs.{balance:.2f} (is owed)")
-            elif balance < -0.01:
-                print(f"  {name}: -Rs.{abs(balance):.2f} (owes)")
-            else:
-                print(f"  {name}: settled up!")
+        for (Map.Entry<String, Double> entry : balances.entrySet()) {
+            if (entry.getValue() > 0.01) {
+                creditors.add(new Object[]{entry.getKey(), entry.getValue()});
+            } else if (entry.getValue() < -0.01) {
+                debtors.add(new Object[]{entry.getKey(), -entry.getValue()}); // Store as positive for easier math
+            }
+        }
 
-    def show_simplified_debts(self):
-        """Show the minimum transactions needed to settle all debts."""
-        transactions = self.get_simplified_debts()
-        print(f"\n  Simplified settlements:")
-        if not transactions:
-            print(f"  Everyone is settled up!")
-            return
-        for from_id, to_id, amount in transactions:
-            from_name = self.members[from_id].name
-            to_name = self.members[to_id].name
-            print(f"  {from_name} -> pays Rs.{amount:.2f} -> {to_name}")
+        // Sort both by amount (descending) for greedy matching
+        creditors.sort((a, b) -> Double.compare((Double) b[1], (Double) a[1]));
+        debtors.sort((a, b) -> Double.compare((Double) b[1], (Double) a[1]));
 
+        List<String[]> transactions = new ArrayList<>();
+        int i = 0, j = 0;
+        while (i < debtors.size() && j < creditors.size()) {
+            String debtorId = (String) debtors.get(i)[0];
+            double debt = (Double) debtors.get(i)[1];
+            String creditorId = (String) creditors.get(j)[0];
+            double credit = (Double) creditors.get(j)[1];
 
-# ============================================================
-# TEST THE SYSTEM — Goa Trip Example
-# ============================================================
+            // Transfer the smaller of the two amounts
+            double transfer = Math.min(debt, credit);
+            transactions.add(new String[]{debtorId, creditorId,
+                    String.valueOf(Math.round(transfer * 100.0) / 100.0)});
 
-# Create users
-sheetal = User("U1", "Sheetal", "9876543210")
-rahul = User("U2", "Rahul", "9876543211")
-priya = User("U3", "Priya", "9876543212")
-amit = User("U4", "Amit", "9876543213")
+            // Update remaining balances
+            debtors.get(i)[1] = (Double) debtors.get(i)[1] - transfer;
+            creditors.get(j)[1] = (Double) creditors.get(j)[1] - transfer;
 
-# Create a group
-print("Creating group: Goa Trip 2026")
-goa_trip = Group("G1", "Goa Trip 2026", sheetal)
-goa_trip.add_member(rahul)
-goa_trip.add_member(priya)
-goa_trip.add_member(amit)
+            // Move to next debtor/creditor if settled
+            if ((Double) debtors.get(i)[1] < 0.01) i++;
+            if ((Double) creditors.get(j)[1] < 0.01) j++;
+        }
 
-# Add expenses
-print("\n--- Adding Expenses ---")
+        return transactions;
+    }
 
-# Sheetal paid for the hotel (split equally among all 4)
-goa_trip.add_expense("Hotel (2 nights)", 12000, sheetal)
-# Each person owes Rs.3000
+    /** Record a settlement (payment) between two members. */
+    public void settle(String fromUserId, String toUserId, double amount) {
+        settlementData.add(new String[]{fromUserId, toUserId, String.valueOf(amount)});
+        String fromName = members.get(fromUserId).getName();
+        String toName = members.get(toUserId).getName();
+        System.out.printf("  Settlement: %s paid Rs.%.2f to %s%n", fromName, amount, toName);
+    }
 
-# Rahul paid for the cab (split equally)
-goa_trip.add_expense("Cab (Airport + Sightseeing)", 3200, rahul)
-# Each person owes Rs.800
+    /** Display who owes what. */
+    public void showBalances() {
+        Map<String, Double> balances = getBalances();
+        System.out.println();
+        System.out.println("==================================================");
+        System.out.println("  Balances for '" + name + "'");
+        System.out.println("==================================================");
+        for (Map.Entry<String, Double> entry : balances.entrySet()) {
+            String memberName = members.get(entry.getKey()).getName();
+            double balance = entry.getValue();
+            if (balance > 0.01) {
+                System.out.printf("  %s: +Rs.%.2f (is owed)%n", memberName, balance);
+            } else if (balance < -0.01) {
+                System.out.printf("  %s: -Rs.%.2f (owes)%n", memberName, Math.abs(balance));
+            } else {
+                System.out.println("  " + memberName + ": settled up!");
+            }
+        }
+    }
 
-# Priya paid for dinner, but Amit ate more, so split by percentage
-goa_trip.add_expense(
-    "Dinner at Thalassa", 4000, priya,
-    SplitType.PERCENTAGE,
-    split_details={"U1": 20, "U2": 20, "U3": 25, "U4": 35}
-)
-# Sheetal: Rs.800, Rahul: Rs.800, Priya: Rs.1000, Amit: Rs.1400
+    /** Show the minimum transactions needed to settle all debts. */
+    public void showSimplifiedDebts() {
+        List<String[]> transactions = getSimplifiedDebts();
+        System.out.println("\n  Simplified settlements:");
+        if (transactions.isEmpty()) {
+            System.out.println("  Everyone is settled up!");
+            return;
+        }
+        for (String[] t : transactions) {
+            String fromName = members.get(t[0]).getName();
+            String toName = members.get(t[1]).getName();
+            System.out.printf("  %s -> pays Rs.%s -> %s%n", fromName, t[2], toName);
+        }
+    }
+}
 
-# Amit paid for water sports, but only 3 participated (not Priya)
-goa_trip.add_expense(
-    "Water Sports", 6000, amit,
-    SplitType.EQUAL,
-    participants=[sheetal, rahul, amit]  # Priya opted out
-)
-# Sheetal: Rs.2000, Rahul: Rs.2000, Amit: Rs.2000
+// ============================================================
+// TEST THE SYSTEM — Goa Trip Example
+// ============================================================
 
-# Show balances
-goa_trip.show_balances()
+class SplitwiseDemo {
+    public static void main(String[] args) {
+        // Create users
+        User sheetal = new User("U1", "Sheetal", "9876543210");
+        User rahul = new User("U2", "Rahul", "9876543211");
+        User priya = new User("U3", "Priya", "9876543212");
+        User amit = new User("U4", "Amit", "9876543213");
 
-# Show simplified settlements
-goa_trip.show_simplified_debts()
+        // Create a group
+        System.out.println("Creating group: Goa Trip 2026");
+        Group goaTrip = new Group("G1", "Goa Trip 2026", sheetal);
+        goaTrip.addMember(rahul);
+        goaTrip.addMember(priya);
+        goaTrip.addMember(amit);
+
+        // Add expenses
+        System.out.println("\n--- Adding Expenses ---");
+
+        // Sheetal paid for the hotel (split equally among all 4)
+        goaTrip.addExpense("Hotel (2 nights)", 12000, sheetal);
+        // Each person owes Rs.3000
+
+        // Rahul paid for the cab (split equally)
+        goaTrip.addExpense("Cab (Airport + Sightseeing)", 3200, rahul);
+        // Each person owes Rs.800
+
+        // Priya paid for dinner, but Amit ate more, so split by percentage
+        Map<String, Double> dinnerSplit = new LinkedHashMap<>();
+        dinnerSplit.put("U1", 20.0);
+        dinnerSplit.put("U2", 20.0);
+        dinnerSplit.put("U3", 25.0);
+        dinnerSplit.put("U4", 35.0);
+        goaTrip.addExpense("Dinner at Thalassa", 4000, priya,
+                SplitType.PERCENTAGE, null, dinnerSplit);
+        // Sheetal: Rs.800, Rahul: Rs.800, Priya: Rs.1000, Amit: Rs.1400
+
+        // Amit paid for water sports, but only 3 participated (not Priya)
+        List<User> waterSportsParticipants = Arrays.asList(sheetal, rahul, amit);
+        goaTrip.addExpense("Water Sports", 6000, amit,
+                SplitType.EQUAL, waterSportsParticipants, null);
+        // Sheetal: Rs.2000, Rahul: Rs.2000, Amit: Rs.2000
+
+        // Show balances
+        goaTrip.showBalances();
+
+        // Show simplified settlements
+        goaTrip.showSimplifiedDebts();
+    }
+}
 ```
 
 ### Design Patterns Used
@@ -1422,8 +1861,8 @@ goa_trip.show_simplified_debts()
 | Pattern | Where | Why |
 |---------|-------|-----|
 | **Strategy** | `SplitStrategy` and subclasses | Different ways to split expenses (equal, exact, percentage). New split types can be added without changing existing code. |
-| **Factory** (implicit) | `SPLIT_STRATEGIES` dict | Maps SplitType enum to the right strategy object. |
-| **Facade** | `Group` class | Provides simple methods like `add_expense()` and `show_balances()` that hide the complexity of balance calculation and debt simplification. |
+| **Factory** (implicit) | `SPLIT_STRATEGIES` map | Maps SplitType enum to the right strategy object. |
+| **Facade** | `Group` class | Provides simple methods like `addExpense()` and `showBalances()` that hide the complexity of balance calculation and debt simplification. |
 
 ---
 
@@ -1444,194 +1883,283 @@ The classic 3x3 grid game. Two players take turns placing their symbol (X or O) 
 
 ### Full Code Solution
 
-```python
-from enum import Enum
+```java
+enum Symbol {
+    X("X"),
+    O("O"),
+    EMPTY(" ");
 
-class Symbol(Enum):
-    X = "X"
-    O = "O"
-    EMPTY = " "
+    private final String value;
+    Symbol(String value) { this.value = value; }
+    public String getValue() { return value; }
+}
 
-class Player:
-    """Represents a player in the game."""
-    def __init__(self, name: str, symbol: Symbol):
-        self.name = name
-        self.symbol = symbol
-        self.wins = 0
+class Player {
+    /** Represents a player in the game. */
+    private String name;
+    private Symbol symbol;
+    private int wins;
 
-    def __str__(self):
-        return f"{self.name} ({self.symbol.value})"
+    public Player(String name, Symbol symbol) {
+        this.name = name;
+        this.symbol = symbol;
+        this.wins = 0;
+    }
 
-class Board:
-    """
-    The game board — an NxN grid.
-    Handles placing symbols, checking validity, and detecting wins.
-    """
-    def __init__(self, size: int = 3):
-        self.size = size
-        # Create a 2D grid filled with EMPTY
-        self.grid = [[Symbol.EMPTY for _ in range(size)] for _ in range(size)]
-        self.moves_made = 0
+    public String getName() { return name; }
+    public Symbol getSymbol() { return symbol; }
+    public int getWins() { return wins; }
+    public void incrementWins() { wins++; }
 
-    def place(self, row: int, col: int, symbol: Symbol) -> bool:
-        """
-        Place a symbol on the board.
-        Returns True if successful, False if invalid move.
-        """
-        # Validate bounds
-        if not (0 <= row < self.size and 0 <= col < self.size):
-            print(f"  Invalid! Row and column must be between 0 and {self.size - 1}")
-            return False
+    @Override
+    public String toString() {
+        return name + " (" + symbol.getValue() + ")";
+    }
+}
 
-        # Validate cell is empty
-        if self.grid[row][col] != Symbol.EMPTY:
-            print(f"  Invalid! Cell ({row},{col}) is already occupied by {self.grid[row][col].value}")
-            return False
+/**
+ * The game board — an NxN grid.
+ * Handles placing symbols, checking validity, and detecting wins.
+ */
+class Board {
+    private int size;
+    private Symbol[][] grid;
+    private int movesMade;
 
-        self.grid[row][col] = symbol
-        self.moves_made += 1
-        return True
+    public Board(int size) {
+        this.size = size;
+        // Create a 2D grid filled with EMPTY
+        this.grid = new Symbol[size][size];
+        for (int r = 0; r < size; r++) {
+            for (int c = 0; c < size; c++) {
+                grid[r][c] = Symbol.EMPTY;
+            }
+        }
+        this.movesMade = 0;
+    }
 
-    def check_winner(self, symbol: Symbol) -> bool:
-        """
-        Check if the given symbol has won.
-        Must check: all rows, all columns, both diagonals.
-        """
-        n = self.size
+    public Board() {
+        this(3);
+    }
 
-        # Check each row — does any row have all cells matching the symbol?
-        for row in range(n):
-            if all(self.grid[row][col] == symbol for col in range(n)):
-                return True
+    /**
+     * Place a symbol on the board.
+     * Returns true if successful, false if invalid move.
+     */
+    public boolean place(int row, int col, Symbol symbol) {
+        // Validate bounds
+        if (row < 0 || row >= size || col < 0 || col >= size) {
+            System.out.println("  Invalid! Row and column must be between 0 and " + (size - 1));
+            return false;
+        }
 
-        # Check each column
-        for col in range(n):
-            if all(self.grid[row][col] == symbol for row in range(n)):
-                return True
+        // Validate cell is empty
+        if (grid[row][col] != Symbol.EMPTY) {
+            System.out.println("  Invalid! Cell (" + row + "," + col + ") is already occupied by "
+                    + grid[row][col].getValue());
+            return false;
+        }
 
-        # Check main diagonal (top-left to bottom-right)
-        if all(self.grid[i][i] == symbol for i in range(n)):
-            return True
+        grid[row][col] = symbol;
+        movesMade++;
+        return true;
+    }
 
-        # Check anti-diagonal (top-right to bottom-left)
-        if all(self.grid[i][n - 1 - i] == symbol for i in range(n)):
-            return True
+    /**
+     * Check if the given symbol has won.
+     * Must check: all rows, all columns, both diagonals.
+     */
+    public boolean checkWinner(Symbol symbol) {
+        int n = size;
 
-        return False
+        // Check each row — does any row have all cells matching the symbol?
+        for (int row = 0; row < n; row++) {
+            boolean allMatch = true;
+            for (int col = 0; col < n; col++) {
+                if (grid[row][col] != symbol) { allMatch = false; break; }
+            }
+            if (allMatch) return true;
+        }
 
-    def is_full(self) -> bool:
-        """Check if the board is completely filled (draw condition)."""
-        return self.moves_made == self.size * self.size
+        // Check each column
+        for (int col = 0; col < n; col++) {
+            boolean allMatch = true;
+            for (int row = 0; row < n; row++) {
+                if (grid[row][col] != symbol) { allMatch = false; break; }
+            }
+            if (allMatch) return true;
+        }
 
-    def reset(self):
-        """Clear the board for a new game."""
-        self.grid = [[Symbol.EMPTY for _ in range(self.size)] for _ in range(self.size)]
-        self.moves_made = 0
+        // Check main diagonal (top-left to bottom-right)
+        boolean allMatch = true;
+        for (int i = 0; i < n; i++) {
+            if (grid[i][i] != symbol) { allMatch = false; break; }
+        }
+        if (allMatch) return true;
 
-    def display(self):
-        """Pretty-print the board."""
-        n = self.size
-        print()
-        for row in range(n):
-            cells = [f" {self.grid[row][col].value} " for col in range(n)]
-            print("|".join(cells))
-            if row < n - 1:
-                print("-" * (4 * n - 1))
-        print()
+        // Check anti-diagonal (top-right to bottom-left)
+        allMatch = true;
+        for (int i = 0; i < n; i++) {
+            if (grid[i][n - 1 - i] != symbol) { allMatch = false; break; }
+        }
+        if (allMatch) return true;
 
-class Game:
-    """
-    The game controller — manages turns, validates moves, and determines the outcome.
-    Uses the State pattern concept: the game has states (IN_PROGRESS, WON, DRAW).
-    """
+        return false;
+    }
 
-    def __init__(self, player1_name: str = "Player 1", player2_name: str = "Player 2",
-                 board_size: int = 3):
-        self.board = Board(board_size)
-        self.players = [
-            Player(player1_name, Symbol.X),
-            Player(player2_name, Symbol.O),
-        ]
-        self.current_turn = 0  # Index into self.players (0 or 1)
-        self.winner = None
-        self.is_over = False
+    /** Check if the board is completely filled (draw condition). */
+    public boolean isFull() {
+        return movesMade == size * size;
+    }
 
-    def current_player(self) -> Player:
-        """Return the player whose turn it is."""
-        return self.players[self.current_turn]
+    /** Clear the board for a new game. */
+    public void reset() {
+        for (int r = 0; r < size; r++) {
+            for (int c = 0; c < size; c++) {
+                grid[r][c] = Symbol.EMPTY;
+            }
+        }
+        movesMade = 0;
+    }
 
-    def make_move(self, row: int, col: int) -> bool:
-        """
-        The current player makes a move at (row, col).
-        Returns True if the move was valid and processed.
-        """
-        if self.is_over:
-            print("Game is already over!")
-            return False
+    /** Pretty-print the board. */
+    public void display() {
+        int n = size;
+        System.out.println();
+        for (int row = 0; row < n; row++) {
+            StringBuilder sb = new StringBuilder();
+            for (int col = 0; col < n; col++) {
+                if (col > 0) sb.append("|");
+                sb.append(" " + grid[row][col].getValue() + " ");
+            }
+            System.out.println(sb);
+            if (row < n - 1) {
+                StringBuilder sep = new StringBuilder();
+                for (int i = 0; i < 4 * n - 1; i++) sep.append("-");
+                System.out.println(sep);
+            }
+        }
+        System.out.println();
+    }
+}
 
-        player = self.current_player()
-        print(f"{player.name}'s turn ({player.symbol.value}): placing at ({row}, {col})")
+/**
+ * The game controller — manages turns, validates moves, and determines the outcome.
+ * Uses the State pattern concept: the game has states (IN_PROGRESS, WON, DRAW).
+ */
+class Game {
+    private Board board;
+    private Player[] players;
+    private int currentTurn; // Index into players (0 or 1)
+    private Player winner;
+    private boolean isOver;
 
-        # Try to place the symbol
-        if not self.board.place(row, col, player.symbol):
-            return False
+    public Game(String player1Name, String player2Name, int boardSize) {
+        this.board = new Board(boardSize);
+        this.players = new Player[] {
+            new Player(player1Name, Symbol.X),
+            new Player(player2Name, Symbol.O),
+        };
+        this.currentTurn = 0;
+        this.winner = null;
+        this.isOver = false;
+    }
 
-        # Display the board after the move
-        self.board.display()
+    public Game(String player1Name, String player2Name) {
+        this(player1Name, player2Name, 3);
+    }
 
-        # Check if this move wins the game
-        if self.board.check_winner(player.symbol):
-            self.winner = player
-            self.is_over = True
-            player.wins += 1
-            print(f"{'=' * 30}")
-            print(f"  {player.name} WINS!")
-            print(f"{'=' * 30}")
-            return True
+    /** Return the player whose turn it is. */
+    public Player currentPlayer() {
+        return players[currentTurn];
+    }
 
-        # Check for draw
-        if self.board.is_full():
-            self.is_over = True
-            print(f"{'=' * 30}")
-            print(f"  It's a DRAW!")
-            print(f"{'=' * 30}")
-            return True
+    /**
+     * The current player makes a move at (row, col).
+     * Returns true if the move was valid and processed.
+     */
+    public boolean makeMove(int row, int col) {
+        if (isOver) {
+            System.out.println("Game is already over!");
+            return false;
+        }
 
-        # Switch turns
-        self.current_turn = 1 - self.current_turn  # Toggle between 0 and 1
-        return True
+        Player player = currentPlayer();
+        System.out.println(player.getName() + "'s turn (" + player.getSymbol().getValue()
+                + "): placing at (" + row + ", " + col + ")");
 
-    def reset(self):
-        """Reset for a new game, keeping the same players."""
-        self.board.reset()
-        self.current_turn = 0
-        self.winner = None
-        self.is_over = False
+        // Try to place the symbol
+        if (!board.place(row, col, player.getSymbol())) {
+            return false;
+        }
 
+        // Display the board after the move
+        board.display();
 
-# ============================================================
-# PLAY A GAME
-# ============================================================
+        // Check if this move wins the game
+        if (board.checkWinner(player.getSymbol())) {
+            this.winner = player;
+            this.isOver = true;
+            player.incrementWins();
+            System.out.println("==============================");
+            System.out.println("  " + player.getName() + " WINS!");
+            System.out.println("==============================");
+            return true;
+        }
 
-game = Game("Sheetal", "Rahul")
+        // Check for draw
+        if (board.isFull()) {
+            this.isOver = true;
+            System.out.println("==============================");
+            System.out.println("  It's a DRAW!");
+            System.out.println("==============================");
+            return true;
+        }
 
-print("Let's play Tic Tac Toe!")
-print(f"{game.players[0]} vs {game.players[1]}")
-game.board.display()
+        // Switch turns
+        currentTurn = 1 - currentTurn; // Toggle between 0 and 1
+        return true;
+    }
 
-# Simulate a game where Sheetal (X) wins with a diagonal
-game.make_move(0, 0)  # Sheetal: X at top-left
-game.make_move(0, 1)  # Rahul:  O at top-center
-game.make_move(1, 1)  # Sheetal: X at center (diagonal building)
-game.make_move(0, 2)  # Rahul:  O at top-right
-game.make_move(2, 2)  # Sheetal: X at bottom-right -> WINS! (diagonal)
+    /** Reset for a new game, keeping the same players. */
+    public void resetGame() {
+        board.reset();
+        currentTurn = 0;
+        winner = null;
+        isOver = false;
+    }
+
+    public Board getBoard() { return board; }
+    public Player[] getPlayers() { return players; }
+}
+
+// ============================================================
+// PLAY A GAME
+// ============================================================
+
+class TicTacToeDemo {
+    public static void main(String[] args) {
+        Game game = new Game("Sheetal", "Rahul");
+
+        System.out.println("Let's play Tic Tac Toe!");
+        System.out.println(game.getPlayers()[0] + " vs " + game.getPlayers()[1]);
+        game.getBoard().display();
+
+        // Simulate a game where Sheetal (X) wins with a diagonal
+        game.makeMove(0, 0); // Sheetal: X at top-left
+        game.makeMove(0, 1); // Rahul:  O at top-center
+        game.makeMove(1, 1); // Sheetal: X at center (diagonal building)
+        game.makeMove(0, 2); // Rahul:  O at top-right
+        game.makeMove(2, 2); // Sheetal: X at bottom-right -> WINS! (diagonal)
+    }
+}
 ```
 
 ### Design Patterns Used
 
 | Pattern | Where | Why |
 |---------|-------|-----|
-| **State** (conceptual) | Game has states: IN_PROGRESS, WON, DRAW | The game behaves differently based on whether it is in progress or over. `make_move` rejects moves when the game is over. |
+| **State** (conceptual) | Game has states: IN_PROGRESS, WON, DRAW | The game behaves differently based on whether it is in progress or over. `makeMove` rejects moves when the game is over. |
 
 ---
 
