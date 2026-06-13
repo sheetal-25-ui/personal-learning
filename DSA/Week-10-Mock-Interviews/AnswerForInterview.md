@@ -117,6 +117,23 @@ You are NOT scored only on "did the code work." Microsoft rubrics usually rate *
 
 Below is every problem from the 5 mock sets, solved the way you'd solve it *live*. For each: the question, clarifying questions, brute force, optimal, a dry-run, and a one-line pattern to burn into memory.
 
+> 🧱 **Shared definitions** used throughout Part A:
+> ```java
+> // Standard singly-linked list node
+> class ListNode {
+>     int val;
+>     ListNode next;
+>     ListNode(int val) { this.val = val; }
+> }
+>
+> // Standard binary tree node
+> class TreeNode {
+>     int val;
+>     TreeNode left, right;
+>     TreeNode(int val) { this.val = val; }
+> }
+> ```
+
 ---
 
 ## 🟦 Mock 1, Problem 1: Merge Intervals
@@ -133,6 +150,38 @@ Given an array of intervals where `intervals[i] = [start_i, end_i]`, merge all o
 ### 🐢 Brute Force
 Repeatedly scan the list and merge any pair that overlaps, restarting until no merges happen. That's roughly **O(n²)** (or worse) and fiddly. Mention it, then immediately pivot to the sorted approach.
 
+```java
+import java.util.*;
+
+// Brute force — repeatedly merge overlapping pairs until stable. O(n^2)+.
+public class MergeIntervalsBrute {
+    public int[][] merge(int[][] intervals) {
+        List<int[]> list = new ArrayList<>();
+        for (int[] iv : intervals) list.add(new int[]{iv[0], iv[1]});
+        boolean merged = true;
+        while (merged) {
+            merged = false;
+            outer:
+            for (int i = 0; i < list.size(); i++) {
+                for (int j = i + 1; j < list.size(); j++) {
+                    int[] a = list.get(i), b = list.get(j);
+                    // Overlap if neither is entirely before the other.
+                    if (a[0] <= b[1] && b[0] <= a[1]) {
+                        a[0] = Math.min(a[0], b[0]);
+                        a[1] = Math.max(a[1], b[1]);
+                        list.remove(j);
+                        merged = true;
+                        break outer; // restart scan after a merge
+                    }
+                }
+            }
+        }
+        return list.toArray(new int[list.size()][]);
+    }
+}
+```
+**Complexity:** O(n²) or worse (each merge restarts the scan), O(n) space.
+
 ### 🚀 Optimal — Sort, then Sweep
 **Key insight:** if you sort by start time, any interval that overlaps the current one must come *right after* it. So you sweep left to right and either extend the last interval or start a new one.
 
@@ -147,7 +196,7 @@ public class MergeIntervals {
         Arrays.sort(intervals, (a, b) -> Integer.compare(a[0], b[0]));
 
         List<int[]> merged = new ArrayList<>();
-        int[] current = intervals[0];
+        int[] current = new int[]{intervals[0][0], intervals[0][1]};
         merged.add(current);
 
         for (int i = 1; i < intervals.length; i++) {
@@ -157,7 +206,7 @@ public class MergeIntervals {
                 current[1] = Math.max(current[1], next[1]);
             } else {
                 // No overlap: start a fresh interval.
-                current = next;
+                current = new int[]{next[0], next[1]};
                 merged.add(current);
             }
         }
@@ -187,21 +236,43 @@ public class MergeIntervals {
 
 ### 📋 Full Question
 Given the root of a binary tree, determine if it is a valid Binary Search Tree (BST). A valid BST: every node's left subtree has values **strictly less**, right subtree has values **strictly greater**, and both subtrees are themselves BSTs.
+**Example:** root `[2,1,3]` → `true`. Root `[5,1,4,null,null,3,6]` → `false` (the `3` and `4` sit on the wrong side of `5`).
 
 ### 🗣️ Clarifying Questions
 - *"Are duplicate values allowed? If a node equals an ancestor, is it valid?"* (Standard: duplicates make it invalid — strict inequality.)
 - *"Could the tree be empty?"* (Yes → an empty tree is a valid BST.)
-- *"Can values be very large/negative? Should I worry about `Integer.MIN_VALUE`/`MAX_VALUE`?"* (Yes — use `Long` or `Integer` object bounds to be safe.)
+- *"Can values be very large/negative? Should I worry about `Integer.MIN_VALUE`/`MAX_VALUE`?"* (Yes — use `Long` object bounds to be safe.)
 
 ### 🐢 Brute Force (the classic trap ⚠️)
-The tempting wrong answer: "check `node.left.val < node.val < node.right.val` at each node." **This is buggy** — it only checks direct children, missing violations deeper in the tree (e.g., a deep-left node larger than the root). Mention this trap, then fix it with bounds.
+The tempting wrong answer: "check `node.left.val < node.val < node.right.val` at each node." **This is buggy** — it only checks direct children, missing violations deeper in the tree (e.g., a deep-left node larger than the root). A *correct* brute force: do a full in-order traversal into a list, then verify the list is strictly increasing.
+
+```java
+import java.util.*;
+
+// Brute force — collect in-order, then check strictly increasing. O(n) time, O(n) space.
+public class ValidateBSTBrute {
+    public boolean isValidBST(TreeNode root) {
+        List<Integer> vals = new ArrayList<>();
+        inorder(root, vals);
+        for (int i = 1; i < vals.size(); i++) {
+            if (vals.get(i) <= vals.get(i - 1)) return false; // not strictly increasing
+        }
+        return true;
+    }
+    private void inorder(TreeNode node, List<Integer> out) {
+        if (node == null) return;
+        inorder(node.left, out);
+        out.add(node.val);
+        inorder(node.right, out);
+    }
+}
+```
 
 ### 🚀 Optimal — Recurse with (min, max) Bounds
-**Key insight:** each node must fall within an allowed `(low, high)` range that *narrows* as you go down. Going left tightens the upper bound; going right tightens the lower bound.
+**Key insight:** each node must fall within an allowed `(low, high)` range that *narrows* as you go down. Going left tightens the upper bound; going right tightens the lower bound. (Same O(n) time as brute force, but O(h) space instead of O(n) — no list.)
 
 ```java
 public class ValidateBST {
-    // TreeNode is the standard: int val; TreeNode left, right;
     public boolean isValidBST(TreeNode root) {
         return validate(root, null, null);
     }
@@ -218,12 +289,6 @@ public class ValidateBST {
         return validate(node.left, low, (long) node.val)
             && validate(node.right, (long) node.val, high);
     }
-}
-
-class TreeNode {
-    int val;
-    TreeNode left, right;
-    TreeNode(int val) { this.val = val; }
 }
 ```
 
@@ -258,6 +323,7 @@ Design a data structure for a **Least Recently Used (LRU) cache** with capacity 
 - `get(key)` → return value if present (and mark it most-recently-used), else `-1`.
 - `put(key, value)` → insert/update; if over capacity, **evict the least-recently-used** item.
 Both operations must run in **O(1)** average time.
+**Example:** `cap=2`; `put(1,1)`, `put(2,2)`, `get(1)`→`1`, `put(3,3)` (evicts 2), `get(2)`→`-1`, `put(4,4)` (evicts 1), `get(1)`→`-1`, `get(3)`→`3`, `get(4)`→`4`.
 
 ### 🗣️ Clarifying Questions
 - *"What's the capacity range — is it always ≥ 1?"*
@@ -267,6 +333,40 @@ Both operations must run in **O(1)** average time.
 
 ### 🐢 Brute Force
 Use an `ArrayList` ordered by recency. `get`/`put` scan the list to find/move items → **O(n)** per op. Violates the O(1) requirement — so we need a smarter structure.
+
+```java
+import java.util.*;
+
+// Brute force — list ordered by recency (front = most recent). O(n) per op.
+public class LRUCacheBrute {
+    private final int capacity;
+    private final List<int[]> items = new ArrayList<>(); // each = {key, value}
+
+    public LRUCacheBrute(int capacity) { this.capacity = capacity; }
+
+    public int get(int key) {
+        for (int i = 0; i < items.size(); i++) {
+            if (items.get(i)[0] == key) {
+                int[] entry = items.remove(i);
+                items.add(0, entry); // move to front (most recent)
+                return entry[1];
+            }
+        }
+        return -1;
+    }
+
+    public void put(int key, int value) {
+        for (int i = 0; i < items.size(); i++) {
+            if (items.get(i)[0] == key) {
+                items.remove(i);
+                break;
+            }
+        }
+        items.add(0, new int[]{key, value});
+        if (items.size() > capacity) items.remove(items.size() - 1); // drop LRU
+    }
+}
+```
 
 ### 🚀 Optimal — HashMap + Doubly-Linked List
 **Key insight:** we need two superpowers at once: **O(1) lookup** (→ HashMap) and **O(1) reordering** (→ doubly-linked list). Combine them. The HashMap maps `key → node`; the linked list keeps recency order, with the *head* = most-recent and *tail* = least-recent. Dummy head/tail sentinels avoid null checks. 🛡️
@@ -359,7 +459,7 @@ public class LRUCache {
 
 ### 📋 Full Question
 Given coins of different denominations and a total `amount`, return the **fewest number of coins** needed to make up that amount. If it's impossible, return `-1`. You have an unlimited supply of each coin.
-**Example:** `coins = [1,2,5]`, `amount = 11` → `3` (because `5 + 5 + 1`).
+**Example:** `coins = [1,2,5]`, `amount = 11` → `3` (because `5 + 5 + 1`). `coins=[2]`, `amount=3` → `-1`.
 
 ### 🗣️ Clarifying Questions
 - *"Can a coin value be 0 or negative?"* (No — positive denominations.)
@@ -367,7 +467,23 @@ Given coins of different denominations and a total `amount`, return the **fewest
 - *"Unlimited coins of each type, right?"* (Yes — that's why it's *unbounded* knapsack.)
 
 ### 🐢 Brute Force — Greedy (and why it FAILS ⚠️)
-Tempting: always grab the biggest coin ≤ remaining. **But greedy is wrong here!** For `coins=[1,3,4]`, `amount=6`: greedy gives `4+1+1 = 3 coins`, but optimal is `3+3 = 2 coins`. **Say this out loud** — recognizing that greedy fails is a strong signal you understand the problem. This is why we need DP.
+Tempting: always grab the biggest coin ≤ remaining. **But greedy is wrong here!** For `coins=[1,3,4]`, `amount=6`: greedy gives `4+1+1 = 3 coins`, but optimal is `3+3 = 2 coins`. **Say this out loud** — recognizing that greedy fails is a strong signal you understand the problem. A *correct* brute force is full recursion (try every coin at every step):
+
+```java
+// Brute force — recursion, try every coin. Exponential time. States the idea cleanly.
+public class CoinChangeBrute {
+    public int coinChange(int[] coins, int amount) {
+        if (amount == 0) return 0;
+        if (amount < 0) return -1;
+        int best = Integer.MAX_VALUE;
+        for (int coin : coins) {
+            int sub = coinChange(coins, amount - coin);
+            if (sub >= 0 && sub + 1 < best) best = sub + 1;
+        }
+        return best == Integer.MAX_VALUE ? -1 : best;
+    }
+}
+```
 
 ### 🚀 Optimal — Bottom-Up DP
 **Key insight:** `dp[a]` = fewest coins to make amount `a`. To make `a`, try each coin `c`: if I use coin `c`, the rest is `dp[a-c]`, so `dp[a] = min(dp[a], dp[a-c] + 1)`. Build up from `0` to `amount`.
@@ -421,7 +537,12 @@ public class CoinChange {
 
 ### 📋 Full Question
 Given a 2D grid of `'1'`s (land) and `'0'`s (water), count the number of islands. An island is land connected **horizontally or vertically** (not diagonally), surrounded by water.
-**Example:** a grid with two separate land clusters → `2`.
+**Example:**
+```
+1 1 0 0          two separate land clusters
+1 0 0 1     →    Answer: 2
+0 0 0 1
+```
 
 ### 🗣️ Clarifying Questions
 - *"Are diagonal connections counted?"* (Standard: **No** — only up/down/left/right.)
@@ -429,7 +550,7 @@ Given a 2D grid of `'1'`s (land) and `'0'`s (water), count the number of islands
 - *"What are the cell values — chars `'1'`/`'0'` or ints?"* (Classic LeetCode uses `char`.)
 
 ### 🐢 Brute Force
-There isn't really a meaningfully different "brute force" — graph traversal *is* the natural solution. You can mention Union-Find as an alternative, but DFS/BFS flood-fill is the expected answer.
+There isn't really a meaningfully different "brute force" — graph traversal *is* the natural solution. The alternative is **Union-Find**: union every adjacent pair of land cells, then count distinct roots. It's the same O(rows×cols) but more code. DFS/BFS flood-fill is the expected answer; mention Union-Find as a follow-up.
 
 ### 🚀 Optimal — DFS Flood Fill
 **Key insight:** scan every cell. When you hit unvisited land (`'1'`), that's a **new island** — increment the count, then **flood-fill** (DFS) the entire connected landmass, marking each cell visited (`'0'`) so you never recount it. It's like dropping ink on a continent and watching it spread to fill the whole landmass. 🌊
@@ -503,8 +624,6 @@ Generate every substring of `s` (O(n²) of them), and for each check if it conta
 **Key insight:** expand the right edge to *include* characters until the window is "valid" (contains all of `t`), then shrink from the left to make it as small as possible, recording the best. The window grows and shrinks like an inchworm. 🐛
 
 ```java
-import java.util.*;
-
 public class MinimumWindowSubstring {
     public String minWindow(String s, String t) {
         if (s == null || t == null || s.length() < t.length() || t.isEmpty()) {
@@ -572,15 +691,17 @@ For each bar, the water on top = `min(maxLeft, maxRight) - height[i]`. The brute
 
 ```java
 // Brute force — O(n^2). Good to state, not to submit.
-public int trapBrute(int[] height) {
-    int total = 0;
-    for (int i = 0; i < height.length; i++) {
-        int maxLeft = 0, maxRight = 0;
-        for (int l = 0; l <= i; l++) maxLeft = Math.max(maxLeft, height[l]);
-        for (int r = i; r < height.length; r++) maxRight = Math.max(maxRight, height[r]);
-        total += Math.min(maxLeft, maxRight) - height[i];
+public class TrappingRainWaterBrute {
+    public int trap(int[] height) {
+        int total = 0;
+        for (int i = 0; i < height.length; i++) {
+            int maxLeft = 0, maxRight = 0;
+            for (int l = 0; l <= i; l++) maxLeft = Math.max(maxLeft, height[l]);
+            for (int r = i; r < height.length; r++) maxRight = Math.max(maxRight, height[r]);
+            total += Math.min(maxLeft, maxRight) - height[i];
+        }
+        return total;
     }
-    return total;
 }
 ```
 
@@ -637,6 +758,7 @@ public class TrappingRainWater {
 
 ### 📋 Full Question
 Design an algorithm to **serialize** a binary tree to a string, and **deserialize** that string back into the exact same tree. (Serialization = encoding a structure into a transmittable/storable format.)
+**Example:** the tree `[1,2,3,null,null,4,5]` serializes to (e.g.) `"1,2,#,#,3,4,#,#,5,#,#,"`, and that string deserializes back into the identical tree.
 
 ### 🗣️ Clarifying Questions
 - *"Can node values be negative or multi-digit?"* (Yes — so use a delimiter like `,`.)
@@ -688,12 +810,6 @@ public class Codec {
         return node;
     }
 }
-
-class TreeNode {
-    int val;
-    TreeNode left, right;
-    TreeNode(int val) { this.val = val; }
-}
 ```
 
 ### 🔍 Dry-Run on
@@ -724,7 +840,7 @@ Mock 5 pulls **2 random problems from Weeks 1–8** plus a **System Design** que
 Treat these exactly like Mocks 1–4: **UMPIRE every time**, no matter how "easy" it looks. The Pattern Cheat Sheet below is your decoder ring — match the trigger phrase to the algorithm in seconds.
 
 #### 🔥 Worked warm-up: Two Sum (the canonical Week-1 problem)
-**Question:** Given `nums` and a `target`, return indices of the two numbers that add to `target`. Exactly one solution; can't reuse an element.
+**Question:** Given `nums` and a `target`, return indices of the two numbers that add to `target`. Exactly one solution; can't reuse an element. Example: `nums=[2,7,11,15]`, `target=9` → `[0,1]`.
 
 🗣️ *Clarify:* "Exactly one answer guaranteed? Same element reused? Sorted?"
 
@@ -843,17 +959,21 @@ This is your **decoder ring** 🔑. In the first 60 seconds, match the problem's
 
 | 🎯 Trigger Phrase in the Problem | 🛠️ Pattern / Algorithm | ⏱️ Typical Big-O | 💡 Quick Tell |
 |----------------------------------|------------------------|------------------|---------------|
-| "find a pair / two numbers that sum to X", "have I seen this before?", "count occurrences" | **HashMap / HashSet** | O(n) time, O(n) space | Need O(1) lookups or frequency counts |
-| "sorted array", "pair/triplet summing to target", "remove duplicates in place", "trapping water" | **Two Pointers** | O(n) time, O(1) space | Two indices moving toward/with each other |
+| "find a pair / two numbers that sum to X", "have I seen this before?", "count occurrences", "group anagrams" | **HashMap / HashSet** | O(n) time, O(n) space | Need O(1) lookups or frequency counts |
+| "sorted array", "pair/triplet summing to target", "remove duplicates in place", "trapping water", "container with most water" | **Two Pointers** | O(n) time, O(1) space | Two indices moving toward/with each other |
 | "longest/shortest/smallest substring or subarray with condition", "contiguous window", "max sum of size k" | **Sliding Window** | O(n) time, O(1)–O(k) space | A contiguous range that grows/shrinks |
-| "sorted input + search", "find in O(log n)", "first/last position", "minimum that satisfies / search answer space" | **Binary Search** | O(log n) time | Sorted data, or a monotonic yes/no answer space |
-| "tree/graph", "connected components", "shortest path (unweighted)", "level order", "flood fill", "islands" | **BFS / DFS** | O(V + E) time | Explore nodes/cells; BFS for shortest, DFS for "fill all" |
-| "number of ways", "min/max cost to reach", "can you make X", "fewest coins", "overlapping subproblems" | **Dynamic Programming** | O(n·m) typical | Optimal substructure + repeated subproblems |
+| "sorted input + search", "find in O(log n)", "first/last position", "minimum that satisfies / search the answer space", "rotated sorted array" | **Binary Search** | O(log n) time | Sorted data, or a monotonic yes/no answer space |
+| "tree/graph", "connected components", "flood fill", "islands", "clone graph", "all paths" | **DFS (recursion / stack)** | O(V + E) time | Explore deep first; great for "fill all" / enumerate |
+| "shortest path in unweighted graph", "level order", "minimum steps / fewest moves", "spread/rot reach all" | **BFS (queue)** | O(V + E) time | Shortest path when every edge costs the same |
+| "course schedule", "build order", "dependencies", "prerequisites", "order tasks given constraints" | **Topological Sort (Kahn's BFS / DFS)** | O(V + E) time | DAG ordering; detect cycle if not all nodes emit |
+| "are these connected?", "merge groups", "number of components", "redundant connection", "accounts merge" | **Union-Find (Disjoint Set)** | ~O(α(n)) per op | Dynamic connectivity / grouping; near-constant with path compression + union by rank |
+| "shortest path with weighted edges", "cheapest cost", "min time to reach", "network delay" | **Dijkstra (min-heap)** | O(E log V) time | Weighted, non-negative edges → greedy via priority queue |
+| "number of ways", "min/max cost to reach", "can you make X", "fewest coins", "longest subsequence", "overlapping subproblems" | **Dynamic Programming** | O(n·m) typical | Optimal substructure + repeated subproblems |
 | "all combinations / permutations / subsets", "generate every valid arrangement", "N-Queens / Sudoku" | **Backtracking** | O(2ⁿ) / O(n!) | Build candidates, undo (backtrack) on dead ends |
-| "maximize/minimize by always taking the best local choice", "intervals", "scheduling", "fewest items" | **Greedy** | O(n log n) often | A locally-optimal choice proves globally optimal (verify it does!) |
+| "maximize/minimize by always taking the best local choice", "intervals", "scheduling", "fewest items", "jump game" | **Greedy** | O(n log n) often | A locally-optimal choice proves globally optimal (verify it does!) |
 | "top K", "K largest/smallest", "merge K sorted", "running median" | **Heap / Priority Queue** | O(n log k) | "K-th" or "top K" → heap |
-| "next greater element", "valid parentheses", "monotonic", "evaluate expression" | **Stack (often monotonic)** | O(n) | Match/undo most-recent, or track increasing/decreasing |
-| "detect cycle in list", "find middle", "k-th from end" | **Fast & Slow Pointers** | O(n) time, O(1) space | One pointer moves 2×, the other 1× |
+| "next greater element", "valid parentheses", "largest rectangle", "daily temperatures", "evaluate expression" | **Monotonic Stack** | O(n) | Track increasing/decreasing; pop until the order holds |
+| "detect cycle in list", "find middle", "k-th from end", "happy number", "linked-list loop start" | **Fast & Slow Pointers** | O(n) time, O(1) space | One pointer moves 2×, the other 1× |
 | "merge overlapping intervals", "meeting rooms", "insert interval" | **Sort + Interval Sweep** | O(n log n) | Sort by start, then sweep & merge |
 
 > ⚡ **How to use it live:** Read the problem → underline the trigger words → glance at this table mentally → announce *"This looks like a sliding-window problem because we want the smallest contiguous substring meeting a condition."* That single sentence tells the interviewer you've **diagnosed** the problem, not just memorized solutions. 🩺

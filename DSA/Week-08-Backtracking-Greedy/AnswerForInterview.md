@@ -1,7 +1,7 @@
 # Week 8: Backtracking & Greedy — How to ANSWER in a Microsoft Interview 🎤 (Java)
 
 Welcome to interview boot camp! 🥾 This week is about two big "decision-making" patterns:
-**Backtracking** (try everything, undo the bad ones) and **Greedy** (grab the best-looking option right now). The interviewer doesn't just want a working answer — they want to *watch you think*. This guide teaches you the exact words to say and the exact code to write.
+**Backtracking** (try everything, undo the bad ones) and **Greedy** (grab the best-looking option right now). The interviewer doesn't just want a working answer — they want to *watch you think*. This guide teaches you the exact words to say and the exact code to write, for ALL 12 problems.
 
 ---
 
@@ -130,7 +130,7 @@ Result: all 8 subsets. ✅
 ### 🧠 Algorithm to Remember Forever
 - **Pattern:** Backtracking (subset / power-set generation).
 - **Core idea:** *Every node in the recursion tree is itself a valid answer — add it before looping.*
-- **Memory hook:** 🪆 **Russian nesting dolls** — each doll (subset) opens into bigger ones, and you collect every doll you see, not just the biggest.
+- **Memory hook:** 🪆 **Russian nesting dolls** — each doll (subset) opens into bigger ones, and you collect every doll you see.
 - **Trigger phrase:** "all possible subsets" / "power set."
 
 ---
@@ -242,19 +242,19 @@ private void backtrack(List<List<Integer>> result, List<Integer> path,
 2 → 2 → 2 → (rem 1) → 2 over(-1) prune; 3 over prune ...
 2 → 2 → 3 → rem 0 ✅ [2,2,3]
 2 → 3 → ... rem<0 paths pruned
-3 → ... no exact hit reaching 7 with start≥3 except...
+3 → ... no exact hit reaching 7 with start≥3
 7 → rem 0 ✅ [7]
 ```
 Result: `[[2,2,3],[7]]`. ✅
 
 ### 📊 Complexity
-- **Time:** O(N^(T/min)) roughly — exponential in target/smallest candidate; hard to tighten, mention the branching factor.
+- **Time:** O(N^(T/min)) roughly — exponential in target/smallest candidate; mention the branching factor honestly.
 - **Space:** O(T/min) recursion depth.
 
 ### 🧠 Algorithm to Remember Forever
 - **Pattern:** Backtracking (combination sum with reuse).
 - **Core idea:** *Subtract a candidate from the target and recurse, allowing the SAME index again; stop when target hits 0 or goes negative.*
-- **Memory hook:** 🪙 **Making change with unlimited coins** — keep grabbing coins (reusing the same denomination is fine) until you hit the exact amount or overshoot.
+- **Memory hook:** 🪙 **Making change with unlimited coins** — keep grabbing coins until you hit the exact amount or overshoot.
 - **Trigger phrase:** "combinations that sum to target" + "reuse allowed."
 
 ---
@@ -319,12 +319,92 @@ c → cd, ce, cf
 ### 🧠 Algorithm to Remember Forever
 - **Pattern:** Backtracking (cartesian product).
 - **Core idea:** *Each digit is a level of the tree; branch on each letter, descend to the next digit.*
-- **Memory hook:** ☎️ **Old Nokia texting** — press '2' three times for 'c'; here you try *all* the letters on each key and combine across keys.
+- **Memory hook:** ☎️ **Old Nokia texting** — try *all* the letters on each key and combine across keys.
 - **Trigger phrase:** "all combinations across multiple choice-sets" / "phone keypad."
 
 ---
 
-## 5️⃣ Word Search (Microsoft — Very Frequent! ✅✅)
+## 5️⃣ N-Queens (Microsoft asked ✅) — Hard
+
+### 📋 Full Question
+Place `n` queens on an `n × n` chessboard so **no two queens attack each other** (no shared row, column, or diagonal). Return **all distinct board configurations**. Each board is a list of strings, `'Q'` for queen and `'.'` for empty.
+
+**Example:**
+`n = 4`
+**Output:** 2 solutions, e.g.
+```
+[".Q..",      ["..Q.",
+ "...Q",       "Q...",
+ "Q...",       "...Q",
+ "..Q."]       ".Q.."]
+```
+
+### 🗣️ What to say first
+- "Do I return all boards, or just the count?" (Here: all boards. The count version is "N-Queens II".)
+- "One queen per row guaranteed?" (Yes — that's how we shrink the search: place row by row.)
+- "How do I detect diagonal attacks efficiently?" (Use `row - col` and `row + col` keys.)
+
+### ⚡ Approach — Backtracking row by row with O(1) attack checks
+Place exactly one queen per row. For the current row, try each column; a column is valid if no queen shares that **column**, the **`\` diagonal** (`row - col`, offset by `n` to stay non-negative), or the **`/` diagonal** (`row + col`). Boolean arrays make each check O(1).
+
+```java
+public List<List<String>> solveNQueens(int n) {
+    List<List<String>> result = new ArrayList<>();
+    char[][] board = new char[n][n];
+    for (char[] row : board) Arrays.fill(row, '.');
+
+    boolean[] cols = new boolean[n];          // occupied columns
+    boolean[] diag1 = new boolean[2 * n];     // "\" diagonals, key = row - col + n
+    boolean[] diag2 = new boolean[2 * n];     // "/" diagonals, key = row + col
+
+    backtrack(result, board, 0, cols, diag1, diag2, n);
+    return result;
+}
+
+private void backtrack(List<List<String>> result, char[][] board, int row,
+                       boolean[] cols, boolean[] diag1, boolean[] diag2, int n) {
+    if (row == n) {                            // all rows filled → valid board
+        List<String> snapshot = new ArrayList<>();
+        for (char[] r : board) snapshot.add(new String(r));
+        result.add(snapshot);
+        return;
+    }
+    for (int col = 0; col < n; col++) {
+        int d1 = row - col + n, d2 = row + col;
+        if (cols[col] || diag1[d1] || diag2[d2]) continue; // attacked → prune
+
+        board[row][col] = 'Q';                 // CHOOSE
+        cols[col] = diag1[d1] = diag2[d2] = true;
+        backtrack(result, board, row + 1, cols, diag1, diag2, n); // EXPLORE next row
+        board[row][col] = '.';                 // UN-CHOOSE
+        cols[col] = diag1[d1] = diag2[d2] = false;
+    }
+}
+```
+
+### 🔬 Dry-run for `n=4`
+```
+Row 0: try col0 → place Q at (0,0), mark col0/diag.
+  Row 1: col0 (taken), col1 (diag1 conflict), col2 OK → place (1,2)
+    Row 2: cols 0,2 taken / diagonals block 1,3 → dead end → backtrack
+  ... eventually (0,1)(1,3)(2,0)(3,2) succeeds → solution 1
+  and (0,2)(1,0)(2,3)(3,1) succeeds → solution 2
+```
+Two valid boards. ✅
+
+### 📊 Complexity
+- **Time:** O(N!) — first row has N choices, next ≤ N-1 viable, and so on; pruning cuts it far below N^N but it's still factorial-ish.
+- **Space:** O(N) for the three boolean arrays + recursion depth (board excluded as output).
+
+### 🧠 Algorithm to Remember Forever
+- **Pattern:** Backtracking (constraint satisfaction, place-one-per-row).
+- **Core idea:** *One queen per row; track occupied column and both diagonals as sets so each placement check is O(1); recurse row by row and undo on backtrack.*
+- **Memory hook:** ♛ **Seating rival monarchs** — each new royal must sit where no existing royal can see them down a column or either diagonal.
+- **Trigger phrase:** "place N pieces so none conflict" / "all valid board configurations."
+
+---
+
+## 6️⃣ Word Search (Microsoft — Very Frequent! ✅✅)
 
 ### 📋 Full Question
 Given an `m × n` grid of characters and a `word`, return **true** if the word exists in the grid. The word is built from **adjacent** cells (up/down/left/right), and the **same cell can't be used twice**.
@@ -348,6 +428,7 @@ Try to start the word at every cell. Mark a cell visited (temporarily overwrite 
 
 ```java
 public boolean exist(char[][] board, String word) {
+    if (board == null || board.length == 0 || word == null) return false;
     for (int r = 0; r < board.length; r++)
         for (int c = 0; c < board[0].length; c++)
             if (dfs(board, word, r, c, 0)) return true;
@@ -384,12 +465,12 @@ For `"ABCB"`: after A,B,C the only unused neighbor with 'B' would force reusing 
 ### 🧠 Algorithm to Remember Forever
 - **Pattern:** Backtracking on a grid (DFS with restore).
 - **Core idea:** *Match the word letter-by-letter along a path; temporarily block the current cell so the path can't cross itself, then unblock when backing out.*
-- **Memory hook:** 🐜 **Ant leaving a scent trail** — it walks one tile at a time, marks where it's been so it won't loop, and erases the mark when it backtracks.
+- **Memory hook:** 🐜 **Ant leaving a scent trail** — it marks where it's been so it won't loop, and erases the mark when it backtracks.
 - **Trigger phrase:** "word/path in a grid" + "adjacent cells" + "can't reuse."
 
 ---
 
-## 6️⃣ Generate Parentheses (Microsoft asked ✅)
+## 7️⃣ Generate Parentheses (Microsoft asked ✅)
 
 ### 📋 Full Question
 Given `n` pairs of parentheses, generate **all combinations of well-formed (valid) parentheses**.
@@ -453,12 +534,12 @@ Output: `["(())","()()"]`. ✅
 ### 🧠 Algorithm to Remember Forever
 - **Pattern:** Backtracking with validity constraints.
 - **Core idea:** *Only place `(` while you have spare opens, and `)` only while there's an unmatched `(` — invalid strings never even get built.*
-- **Memory hook:** 🧱 **Stacking and matching blocks** — you can lay an open block any time you have stock, but you can only cap one if there's an uncapped open below it.
+- **Memory hook:** 🧱 **Stacking and matching blocks** — lay an open block any time you have stock, but only cap one if there's an uncapped open below it.
 - **Trigger phrase:** "generate all valid combinations" + a balancing rule.
 
 ---
 
-## 7️⃣ Jump Game (Microsoft asked ✅) — GREEDY 🤑
+## 8️⃣ Jump Game (Microsoft asked ✅) — GREEDY 🤑
 
 ### 📋 Full Question
 Given an array `nums` where `nums[i]` is the **max jump length** from index `i`, return **true** if you can reach the last index starting from index 0.
@@ -486,7 +567,7 @@ public boolean canJump(int[] nums) {
 }
 ```
 
-**Why greedy is safe here:** if you *can* reach index `i`, you can reach everything before it; so the only thing that matters is the *farthest* point reachable so far. No need to remember individual paths → no DP needed.
+**Why greedy is safe here (one-line proof):** if you *can* reach index `i`, you can reach everything before it, so the only thing that matters is the *farthest* point reachable so far — individual paths are irrelevant, so no DP is needed.
 
 ### 🔬 Dry-run
 ```
@@ -506,11 +587,70 @@ public boolean canJump(int[] nums) {
 - **Memory hook:** 🦘 **A kangaroo with a fuel gauge** — only the *maximum* distance it could possibly hop matters, not which exact hops it took.
 - **Trigger phrase:** "can you reach the end" / "max jump length."
 
-> 🆚 **Jump Game II** (the sequel) asks for the *minimum number of jumps*. Still greedy: treat it like BFS levels — track the end of the current jump's range, and when you reach it, increment jumps and extend the range to `farthest`. O(N).
+---
+
+## 9️⃣ Jump Game II (Microsoft asked ✅) — GREEDY 🤑
+
+### 📋 Full Question
+Same setup as Jump Game, but now you're **guaranteed you can reach the last index**. Return the **minimum number of jumps** to get from index 0 to the last index.
+
+**Example:**
+`nums = [2,3,1,1,4]`
+**Output:** `2` (jump 0→1, then 1→4)
+
+### 🗣️ What to say first
+- "Am I guaranteed the end is reachable?" (Yes — the problem promises it.)
+- "Do I count jumps or hops landed?" (Number of jumps.)
+- "Single-element array?" (Already at the end → 0 jumps.)
+
+### ⚡ Approach — Greedy "implicit BFS by levels"
+Think of it as BFS where each level = everything reachable with one more jump. Track `currentEnd` (the farthest index of the current jump's range) and `farthest` (the best index reachable from anywhere in this level). When `i` reaches `currentEnd`, you must take a jump: bump the counter and extend the range to `farthest`.
+
+```java
+public int jump(int[] nums) {
+    int jumps = 0;          // jumps taken so far
+    int currentEnd = 0;     // farthest index reachable with `jumps` jumps
+    int farthest = 0;       // farthest index reachable with one more jump
+
+    // stop at length-1: we never need to jump FROM the last index
+    for (int i = 0; i < nums.length - 1; i++) {
+        farthest = Math.max(farthest, i + nums[i]); // best landing from this level
+        if (i == currentEnd) {                       // must commit to a jump now
+            jumps++;
+            currentEnd = farthest;                   // new range = everything reachable
+        }
+    }
+    return jumps;
+}
+```
+
+**Why greedy is safe (one-line proof):** within the indices reachable by `k` jumps, the single best move is the one that pushes `farthest` the most — committing the jump exactly when you exhaust the current range guarantees the minimum number of levels (same optimality as BFS shortest path).
+
+### 🔬 Dry-run for `[2,3,1,1,4]`
+```
+i0: farthest=max(0,0+2)=2; i==currentEnd(0) → jumps=1, currentEnd=2
+i1: farthest=max(2,1+3)=4
+i2: farthest=max(4,2+1)=4; i==currentEnd(2) → jumps=2, currentEnd=4
+i3: farthest=max(4,3+1)=4   (loop stops before last index)
+return jumps = 2
+```
+✅
+
+### 📊 Complexity
+- **Time:** O(N) — single pass.
+- **Space:** O(1).
+
+### 🧠 Algorithm to Remember Forever
+- **Pattern:** Greedy (BFS-levels reach expansion).
+- **Core idea:** *Extend `farthest` as you walk; each time you hit the boundary of the current jump's range, "spend" a jump and grow the range.*
+- **Memory hook:** 🪜 **Climbing ladder rungs in batches** — within one reach you grab the rung that lets you climb highest next, then take a single big step up to it.
+- **Trigger phrase:** "minimum number of jumps to reach the end."
+
+> 🆚 **Jump Game vs Jump Game II:** Game I asks *can you* (true/false, track `maxReach`). Game II asks *how few jumps* (count levels with `currentEnd` + `farthest`). Both O(N) greedy, different bookkeeping.
 
 ---
 
-## 8️⃣ Task Scheduler (Microsoft — Very Frequent! ✅✅) — GREEDY 🤑
+## 🔟 Task Scheduler (Microsoft — Very Frequent! ✅✅) — GREEDY 🤑
 
 ### 📋 Full Question
 Given tasks (chars A-Z) and an integer `n` (cooldown), the **same task** must be separated by at least `n` intervals. Each task takes 1 unit; CPU can be **idle**. Return the **minimum total time** to finish all tasks.
@@ -524,7 +664,7 @@ Given tasks (chars A-Z) and an integer `n` (cooldown), the **same task** must be
 - "Is `n` the *gap* between identical tasks?" (Yes, minimum idle separation.)
 - "Could `n` be 0?" (Then answer is just `tasks.length`.)
 
-### ⚡ Approach — Greedy with a math formula (most-frequent task anchors the schedule)
+### ⚡ Approach — Greedy math formula (most-frequent task anchors the schedule)
 The **most frequent** task forces the skeleton. If `maxFreq` is its count, it creates `(maxFreq - 1)` gaps of size `(n + 1)`, plus the tasks tied for the max at the end. But if there are *many* distinct tasks, no idling is needed — so take the max with `tasks.length`.
 
 ```java
@@ -545,7 +685,7 @@ public int leastInterval(char[] tasks, int n) {
 }
 ```
 
-**Why greedy is safe:** scheduling the *rarest tasks into the idle gaps of the most frequent task* is always optimal — there's no future cost that a different ordering avoids. The formula captures the best possible packing.
+**Why greedy is safe (one-line proof):** scheduling the *rarest tasks into the idle gaps of the most frequent task* is always optimal — there's no future cost a different ordering avoids, and the formula captures the tightest possible packing.
 
 ### 🔬 Dry-run for `["A","A","A","B","B","B"], n=2`
 ```
@@ -568,7 +708,7 @@ answer = max(8, 6) = 8  →  A B _ A B _ A B
 
 ---
 
-## 9️⃣ Meeting Rooms II (Microsoft — Classic ⭐) — GREEDY 🤑
+## 1️⃣1️⃣ Meeting Rooms II (Microsoft — Classic ⭐) — GREEDY 🤑
 
 ### 📋 Full Question
 Given meeting intervals `[[start, end], ...]`, return the **minimum number of conference rooms** required so no two overlapping meetings share a room.
@@ -603,6 +743,8 @@ public int minMeetingRooms(int[][] intervals) {
 }
 ```
 
+**Why greedy is safe (one-line proof):** processing in start order and always freeing the soonest-ending room never wastes a room — if even that room is busy, every room is busy, so a new one is genuinely required.
+
 ### 🔬 Dry-run for `[[0,30],[5,10],[15,20]]`
 ```
 sorted: [0,30],[5,10],[15,20]
@@ -620,13 +762,13 @@ answer = heap.size() = 2
 
 ### 🧠 Algorithm to Remember Forever
 - **Pattern:** Greedy + min-heap (interval scheduling / overlap counting).
-- **Core idea:** *Process meetings in start order; always free up the room that ends earliest if it's available, else open a new one. The peak heap size is the answer.*
-- **Memory hook:** 🏨 **A hotel front desk** — guests (meetings) arrive in order; if a room has already checked out, you reuse it; otherwise you build a new room. Count the rooms.
+- **Core idea:** *Process meetings in start order; reuse the room that ends earliest if it's available, else open a new one. Peak heap size is the answer.*
+- **Memory hook:** 🏨 **A hotel front desk** — reuse a checked-out room if one's free; otherwise build a new one. Count the rooms.
 - **Trigger phrase:** "minimum rooms / resources" + "overlapping intervals."
 
 ---
 
-## 🔟 Gas Station (Microsoft asked ✅) — GREEDY 🤑
+## 1️⃣2️⃣ Gas Station (Microsoft asked ✅) — GREEDY 🤑
 
 ### 📋 Full Question
 There are `n` gas stations in a circle. `gas[i]` is fuel at station `i`; `cost[i]` is fuel needed to travel from `i` to `i+1`. Return the **starting station index** to complete the circuit once, or **-1** if impossible. (Solution is guaranteed unique if it exists.)
@@ -662,7 +804,7 @@ public int canCompleteCircuit(int[] gas, int[] cost) {
 }
 ```
 
-**Why greedy is safe:** if you run out of gas going from start `s` to `i`, every station between `s` and `i` had a non-negative cumulative surplus when you reached it (otherwise you'd have reset earlier) — so none of them could be a better start. The first feasible start after the last failure is THE answer.
+**Why greedy is safe (one-line proof):** if you run out of gas going from start `s` to `i`, every earlier station in that stretch had a non-negative running surplus when reached (else you'd have reset sooner), so none of them could be a better start — the first feasible start after the last failure is THE answer.
 
 ### 🔬 Dry-run for `gas=[1,2,3,4,5]`, `cost=[3,4,5,1,2]`
 ```
@@ -683,7 +825,7 @@ total 0 >= 0 → return start = 3
 ### 🧠 Algorithm to Remember Forever
 - **Pattern:** Greedy (running-balance with restart).
 - **Core idea:** *If total gas ≥ total cost a start exists; whenever the tank dips below zero, the answer must lie after that point — reset start there.*
-- **Memory hook:** ⛽ **A road trip budget** — the moment your wallet hits negative, you know none of the earlier stops could've been your true starting point; begin fresh from the next one.
+- **Memory hook:** ⛽ **A road trip budget** — the moment your wallet hits negative, none of the earlier stops could've been your true start; begin fresh from the next one.
 - **Trigger phrase:** "circular route" + "start index" + "fuel/resource balance."
 
 ---
@@ -696,18 +838,20 @@ total 0 >= 0 → return start = 3
 | 2 | Permutations | Backtracking (used[]) | O(N · N!) | O(N) |
 | 3 | Combination Sum | Backtracking (reuse i) | O(N^(T/min)) | O(T/min) |
 | 4 | Letter Combinations | Backtracking (cartesian) | O(4ᴺ · N) | O(N) |
-| 5 | Word Search | DFS Backtracking on grid | O(M·N·4ᴸ) | O(L) |
-| 6 | Generate Parentheses | Backtracking + pruning | O(4ⁿ/√n) | O(n) |
-| 7 | Jump Game | Greedy (max reach) | O(N) | O(1) |
-| 8 | Task Scheduler | Greedy (frequency formula) | O(N) | O(1) |
-| 9 | Meeting Rooms II | Greedy + min-heap | O(N log N) | O(N) |
-| 10 | Gas Station | Greedy (running balance) | O(N) | O(1) |
+| 5 | N-Queens | Backtracking (per-row + diag sets) | O(N!) | O(N) |
+| 6 | Word Search | DFS Backtracking on grid | O(M·N·4ᴸ) | O(L) |
+| 7 | Generate Parentheses | Backtracking + pruning | O(4ⁿ/√n) | O(n) |
+| 8 | Jump Game | Greedy (max reach) | O(N) | O(1) |
+| 9 | Jump Game II | Greedy (BFS levels) | O(N) | O(1) |
+| 10 | Task Scheduler | Greedy (frequency formula) | O(N) | O(1) |
+| 11 | Meeting Rooms II | Greedy + min-heap | O(N log N) | O(N) |
+| 12 | Gas Station | Greedy (running balance) | O(N) | O(1) |
 
 ---
 
 # 🧠🧠 PATTERN RECOGNITION TABLE
 
-> **The master key:** Backtracking = *"find ALL / generate every combination or permutation."* Greedy = *"maximize/minimize a single answer via a locally-optimal, provably-safe choice."*
+> **The master key:** Backtracking = *"find ALL / generate every combination, permutation, or board."* Greedy = *"maximize/minimize a single answer via a locally-optimal, provably-safe choice — often after sorting."*
 
 | If the question says... (Trigger) | Pattern | Memory Hook | Big-O |
 |---|---|---|---|
@@ -715,16 +859,18 @@ total 0 >= 0 → return start = 3
 | "all **permutations** / orderings" | Backtracking (used[]) | 🪑 Musical chairs | O(N·N!) |
 | "all **combinations** summing to target" (reuse) | Backtracking (pass i) | 🪙 Unlimited coins | O(N^(T/min)) |
 | "all combinations across **choice sets**" (keypad) | Backtracking (cartesian) | ☎️ Nokia texting | O(4ᴺ·N) |
+| "place N pieces so **none conflict**" | Backtracking (per-row + sets) | ♛ Rival monarchs | O(N!) |
 | "**path/word in a grid**, adjacent, no reuse" | Backtracking DFS + restore | 🐜 Ant scent trail | O(M·N·4ᴸ) |
 | "generate all **valid** (balanced) strings" | Backtracking + prune | 🧱 Matching blocks | O(4ⁿ/√n) |
 | "**can you reach** the end / max jump" | Greedy (max reach) | 🦘 Kangaroo fuel gauge | O(N) |
+| "**minimum jumps** to reach the end" | Greedy (BFS levels) | 🪜 Ladder rungs | O(N) |
 | "**cooldown** / minimum schedule time" | Greedy (freq formula) | 🍞 Sandwich gaps | O(N) |
 | "**minimum rooms** / overlapping intervals" | Greedy + min-heap | 🏨 Hotel front desk | O(N log N) |
 | "**circular route**, start index, fuel balance" | Greedy (running balance) | ⛽ Road-trip budget | O(N) |
 
 **The 5-second triage:**
-1. Do they want **every** answer / arrangement? → **Backtracking** (choose → explore → un-choose).
-2. Do they want **one** optimal number (min/max/count/reachability) AND a locally-best choice is provably safe? → **Greedy**.
+1. Do they want **every** answer / arrangement / board? → **Backtracking** (choose → explore → un-choose).
+2. Do they want **one** optimal number (min/max/count/reachability) AND a locally-best choice is provably safe? → **Greedy** (often after sorting).
 3. Locally-best choice could trap you later (choices interact)? → that's **DP**, not greedy.
 
 ---
@@ -738,6 +884,7 @@ total 0 >= 0 → return start = 3
 - **Un-choose with the right remove:** `path.remove(path.size() - 1)` removes the LAST element (by index). ⚠️ `list.remove(Integer)` vs `list.remove(int)` is a classic trap — `remove(int)` removes by *index*. Removing the last index is always safe.
 - **Strings:** use a `StringBuilder` as the path; `append(c)` to choose, `deleteCharAt(len-1)` to un-choose. Far cheaper than string concatenation.
 - **Grid visited:** overwrite the cell in place (`board[r][c]='#'`) and restore it — saves a separate `boolean[][]` and O(M·N) space.
+- **Snapshot a `char[]` board:** `snapshot.add(new String(row));` turns a row into an immutable String for the result (N-Queens).
 - **Pruning:** `if (!isValid) continue;` early — it's what makes backtracking faster than brute force.
 
 ### For Greedy 🤑
@@ -760,11 +907,11 @@ Before you say "I'm done," tick every box:
 - [ ] 🐢 **Mentioned brute force** and its complexity before jumping to the optimal.
 - [ ] 🧭 **Identified the pattern out loud**: "This is *backtracking* because we need all X" or "This is *greedy* because the locally-best choice is safe since Y."
 - [ ] 🔁 For backtracking: wrote **choose → explore → un-choose**, and **copied** the path on add (`new ArrayList<>(path)`).
-- [ ] ✂️ Added **pruning / validity checks** to cut dead branches.
+- [ ] ✂️ Added **pruning / validity checks** to cut dead branches (column/diagonal sets, `remaining < 0`, `close < open`).
 - [ ] 🤑 For greedy: **justified WHY the greedy choice is safe** (this is what separates a pass from a fail).
 - [ ] 🔬 **Dry-ran** the code on the example input, out loud, line by line.
-- [ ] 🧪 Checked **edge cases**: empty array, single element, all-same values, a `0` in Jump Game, `n=0` in Task Scheduler.
-- [ ] 📊 Stated **Time AND Space** complexity and explained the dominant term.
-- [ ] 🧹 Mentioned a **trade-off or follow-up** ("If we needed the count instead of the list, we could..." / "Jump Game II extends this to BFS levels").
+- [ ] 🧪 Checked **edge cases**: empty array, single element, all-same values, a `0` in Jump Game, `n=0` in Task Scheduler, total gas < total cost.
+- [ ] 📊 Stated **Time AND Space** complexity and explained the dominant term (and honestly named factorial/exponential where it applies).
+- [ ] 🧹 Mentioned a **trade-off or follow-up** ("Jump Game I → II extends reachability to minimum jumps" / "N-Queens II just counts boards").
 
 🎤 **Remember:** The interviewer is hiring a *thinker*, not a *coder*. Narrate every decision. A clear, correct, well-explained O(N) greedy beats a silent, buggy "clever" solution every time. You've got this! 🚀

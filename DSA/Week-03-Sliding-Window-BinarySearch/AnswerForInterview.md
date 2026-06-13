@@ -82,7 +82,7 @@ private boolean allUnique(String s, int start, int end) {
 - ❌ Why not enough: Re-checking uniqueness from scratch wastes work — way too slow for large strings.
 
 **Approach 2 — Optimal (Sliding Window)**
-Grow a window with `right`. When a duplicate appears, shrink from `left` until the duplicate is gone. Track the max window size.
+Grow a window with `right`. When a duplicate appears, jump `left` past its last seen position. Track the max window size.
 
 ```java
 public int lengthOfLongestSubstring(String s) {
@@ -162,7 +162,7 @@ private boolean contains(String sub, String t) {
 - ⏱️ Time: **O(n² · m)**, Space: **O(1)**.
 - ❌ Why not enough: Quadratic substring generation + per-substring check is far too slow.
 
-**Approach 2 — Optimal (Sliding Window with `have`/`need` counters)**
+**Approach 2 — Optimal (Sliding Window with `need`/`required` counters)**
 Expand right until the window is valid (contains all of `t`), then shrink left to minimize, recording the best.
 
 ```java
@@ -213,7 +213,7 @@ public String minWindow(String s, String t) {
 
 📋 **Full Question**
 Given a string `s` and integer `k`, you may replace at most `k` characters with any uppercase letter. Return the length of the **longest substring containing the same letter** you can get.
-- Input: `s = "AABABBA"`, `k = 1` → Output: `4` (replace one B → `"AABA"`→`"AAAA"`... best is `"ABBA"`→`"BBBB"` length 4)
+- Input: `s = "AABABBA"`, `k = 1` → Output: `4` (e.g. `"ABBA"` → replace the A → `"BBBB"`, length 4)
 - Input: `s = "ABAB"`, `k = 2` → Output: `4`
 
 🗣️ **What to say first**
@@ -390,9 +390,9 @@ Slide the window: add the new right element, subtract the element that left.
 
 ```java
 public double findMaxAverage(int[] nums, int k) {
-    int sum = 0;
+    long sum = 0;
     for (int i = 0; i < k; i++) sum += nums[i];   // first window
-    int best = sum;
+    long best = sum;
     for (int right = k; right < nums.length; right++) {
         sum += nums[right] - nums[right - k];     // slide by one
         best = Math.max(best, sum);
@@ -487,7 +487,143 @@ public int totalFruit(int[] fruits) {
 
 ---
 
-## 7️⃣ Search in Rotated Sorted Array (Medium) ⭐ (Very Frequent!)
+## 7️⃣ Sliding Window Maximum (Hard) ⭐
+
+📋 **Full Question**
+Given an array `nums` and window size `k`, return an array of the **maximum of each contiguous window of size `k`** as the window slides left to right.
+- Input: `nums = [1,3,-1,-3,5,3,6,7]`, `k = 3` → Output: `[3,3,5,5,6,7]`
+- Input: `nums = [1]`, `k = 1` → Output: `[1]`
+
+🗣️ **What to say first**
+- "There are `n - k + 1` windows, so the output length is `n - k + 1`, right?"
+- "Can `k` equal the whole array, or be 1?"
+- "Are values within int range? (I'll keep it int-safe.)"
+
+**Approach 1 — Brute Force**
+For each window, scan all `k` elements to find the max.
+```java
+public int[] maxSlidingWindowBrute(int[] nums, int k) {
+    int n = nums.length;
+    int[] result = new int[n - k + 1];
+    for (int i = 0; i + k <= n; i++) {
+        int max = nums[i];
+        for (int j = i; j < i + k; j++) max = Math.max(max, nums[j]);
+        result[i] = max;
+    }
+    return result;
+}
+```
+- ⏱️ Time: **O(n · k)**, Space: **O(1)** (excluding output).
+- ❌ Why not enough: When `k` is large this is near O(n²); we recompute overlapping maxes.
+
+**Approach 2 — Optimal (Monotonic Deque)**
+Keep a **deque of indices** whose values are in **decreasing order**. The front always holds the index of the current window's max. Pop smaller values from the back (they can never be the max while a bigger newcomer is present) and pop the front when it slides out of the window.
+
+```java
+public int[] maxSlidingWindow(int[] nums, int k) {
+    int n = nums.length;
+    int[] result = new int[n - k + 1];
+    java.util.Deque<Integer> dq = new java.util.ArrayDeque<>(); // holds indices
+    for (int right = 0; right < n; right++) {
+        // 1. Drop indices whose value is <= current (they're useless now)
+        while (!dq.isEmpty() && nums[dq.peekLast()] <= nums[right]) {
+            dq.pollLast();
+        }
+        dq.offerLast(right);
+        // 2. Drop the front if it's outside the window [right-k+1, right]
+        if (dq.peekFirst() <= right - k) {
+            dq.pollFirst();
+        }
+        // 3. Once the first full window is formed, record the max (front)
+        if (right >= k - 1) {
+            result[right - k + 1] = nums[dq.peekFirst()];
+        }
+    }
+    return result;
+}
+```
+
+🔍 **Dry-run on `[1,3,-1,-3,5,3,6,7]`, `k = 3`:**
+- right=0 (1): dq=[0]
+- right=1 (3): 3≥1 pop 0 → dq=[1]
+- right=2 (-1): dq=[1,2]; window full → max=nums[1]=3 → result[0]=3
+- right=3 (-3): dq=[1,2,3]; front 1 ≤ 0? no → max=nums[1]=3 → result[1]=3
+- right=4 (5): pop 3,2,1 (all ≤5) → dq=[4]; max=5 → result[2]=5
+- right=5 (3): dq=[4,5]; max=5 → result[3]=5
+- right=6 (6): pop 5,4 → dq=[6]; max=6 → result[4]=6
+- right=7 (7): pop 6 → dq=[7]; max=7 → result[5]=7
+- Result: **[3,3,5,5,6,7]** ✅
+
+- ⏱️ Time: **O(n)** (each index pushed/popped once), Space: **O(k)** (deque).
+
+🧠 **Algorithm to Remember Forever**
+- **Pattern:** Sliding Window + Monotonic Deque.
+- **Core idea:** Maintain a *decreasing* deque of indices; the front is always the window max.
+- **Memory hook:** 🏔️ A **mountain ridge** — keep only the peaks; whenever a taller peak appears, the smaller ones behind it become irrelevant.
+- **Trigger phrase:** *"maximum (or minimum) of every sliding window of size k"*
+
+---
+
+## 8️⃣ Binary Search (Easy) ⭐
+
+📋 **Full Question**
+Given a sorted (ascending) array `nums` and a `target`, return its index, or `-1` if absent. Must run in **O(log n)**.
+- Input: `nums = [-1,0,3,5,9,12]`, `target = 9` → Output: `4`
+- Input: `nums = [-1,0,3,5,9,12]`, `target = 2` → Output: `-1`
+
+🗣️ **What to say first**
+- "Array is sorted ascending with unique values, right?"
+- "Return the index if found, `-1` otherwise — correct?"
+- "They want O(log n), so a linear scan won't satisfy the constraint."
+
+**Approach 1 — Brute Force**
+Linear scan.
+```java
+public int searchBrute(int[] nums, int target) {
+    for (int i = 0; i < nums.length; i++) {
+        if (nums[i] == target) return i;
+    }
+    return -1;
+}
+```
+- ⏱️ Time: **O(n)**, Space: **O(1)**.
+- ❌ Why not enough: Ignores the sorted structure; interviewer explicitly wants **O(log n)**.
+
+**Approach 2 — Optimal (Classic Binary Search)**
+Halve the search space each step by comparing the middle element to the target.
+
+```java
+public int search(int[] nums, int target) {
+    int left = 0, right = nums.length - 1;
+    while (left <= right) {
+        int mid = left + (right - left) / 2;   // overflow-safe midpoint
+        if (nums[mid] == target) {
+            return mid;
+        } else if (nums[mid] < target) {
+            left = mid + 1;                     // target is to the right
+        } else {
+            right = mid - 1;                    // target is to the left
+        }
+    }
+    return -1; // not found
+}
+```
+
+🔍 **Dry-run on `[-1,0,3,5,9,12]`, `target = 9`:**
+- left=0, right=5, mid=2 → nums[2]=3 < 9 → left=3.
+- left=3, right=5, mid=4 → nums[4]=9 == target → return **4** ✅
+
+- ⏱️ Time: **O(log n)**, Space: **O(1)**.
+
+🧠 **Algorithm to Remember Forever**
+- **Pattern:** Binary Search (the canonical one).
+- **Core idea:** Compare to the middle; throw away the half that can't contain the target.
+- **Memory hook:** 📖 Opening a **dictionary in the middle** — too far? flip left; not far enough? flip right.
+- **Trigger phrase:** *"sorted array"* + *"find target in O(log n)"*
+
+---
+
+## 9️⃣ Search in Rotated Sorted Array (Medium) ⭐ (Very Frequent!)
 
 📋 **Full Question**
 A sorted array was rotated at an unknown pivot. Given `nums` and `target`, return its index, or `-1`. Must run in **O(log n)**.
@@ -502,7 +638,7 @@ A sorted array was rotated at an unknown pivot. Given `nums` and `target`, retur
 **Approach 1 — Brute Force**
 Linear scan.
 ```java
-public int searchBrute(int[] nums, int target) {
+public int searchRotatedBrute(int[] nums, int target) {
     for (int i = 0; i < nums.length; i++) {
         if (nums[i] == target) return i;
     }
@@ -555,80 +691,7 @@ public int search(int[] nums, int target) {
 
 ---
 
-## 8️⃣ Koko Eating Bananas (Medium) ⭐ — Binary Search on the ANSWER
-
-📋 **Full Question**
-Koko eats bananas at speed `k` per hour. There are `piles[i]` bananas in each pile; each hour she eats from one pile (and if a pile has fewer than `k`, she finishes it and stops for that hour). Given `h` hours, find the **minimum integer speed `k`** to finish all bananas within `h` hours.
-- Input: `piles = [3,6,7,11]`, `h = 8` → Output: `4`
-- Input: `piles = [30,11,23,4,20]`, `h = 5` → Output: `30`
-
-🗣️ **What to say first**
-- "The answer (speed) ranges from 1 to max(piles), right?"
-- "Hours per pile = ceil(pile / k), and h ≥ number of piles is guaranteed?"
-- "I want the *minimum* speed that still finishes in time — so this is binary search on the answer."
-
-**Approach 1 — Brute Force**
-Try every speed `k` from 1 upward; return the first that finishes within `h`.
-```java
-public int minEatingSpeedBrute(int[] piles, int h) {
-    int maxPile = 0;
-    for (int p : piles) maxPile = Math.max(maxPile, p);
-    for (int k = 1; k <= maxPile; k++) {
-        if (hoursNeeded(piles, k) <= h) return k;
-    }
-    return maxPile;
-}
-private long hoursNeeded(int[] piles, int k) {
-    long hours = 0;
-    for (int p : piles) hours += (p + k - 1) / k; // ceil division
-    return hours;
-}
-```
-- ⏱️ Time: **O(maxPile · n)**, Space: **O(1)**.
-- ❌ Why not enough: Linear scan over speeds is slow when `maxPile` is huge (up to 10⁹).
-
-**Approach 2 — Optimal (Binary Search on Answer)**
-The "can finish in time?" check is **monotonic**: if speed `k` works, any larger speed also works. Binary search the smallest `k` that works.
-
-```java
-public int minEatingSpeed(int[] piles, int h) {
-    int left = 1, right = 0;
-    for (int p : piles) right = Math.max(right, p);  // max possible speed
-    while (left < right) {
-        int mid = left + (right - left) / 2;
-        if (hoursNeeded(piles, mid) <= h) {
-            right = mid;        // mid works → try slower
-        } else {
-            left = mid + 1;     // too slow → speed up
-        }
-    }
-    return left;               // smallest speed that finishes in time
-}
-private long hoursNeeded(int[] piles, int k) {
-    long hours = 0;
-    for (int p : piles) hours += (p + k - 1) / k;    // ceil(p / k)
-    return hours;
-}
-```
-
-🔍 **Dry-run on `[3,6,7,11]`, `h = 8`:**
-- left=1, right=11. mid=6 → hours = 1+1+2+2 = 6 ≤ 8 ✅ → right=6.
-- left=1, right=6. mid=3 → hours = 1+2+3+4 = 10 > 8 ❌ → left=4.
-- left=4, right=6. mid=5 → hours = 1+2+2+3 = 8 ≤ 8 ✅ → right=5.
-- left=4, right=5. mid=4 → hours = 1+2+2+3 = 8 ≤ 8 ✅ → right=4.
-- left==right=4 → answer **4** ✅
-
-- ⏱️ Time: **O(n · log(maxPile))**, Space: **O(1)**.
-
-🧠 **Algorithm to Remember Forever**
-- **Pattern:** Binary Search on the Answer (parametric / "monotone predicate").
-- **Core idea:** Don't search the array — search the *range of possible answers*; use a feasibility check.
-- **Memory hook:** 🍌 A **thermostat dial** — turn the speed dial up/down and check "does it finish in time?" until you land on the lowest comfortable setting.
-- **Trigger phrase:** *"minimum/maximum [rate/capacity/size] such that [condition holds]"*
-
----
-
-## 9️⃣ Find First and Last Position (Medium) ⭐
+## 🔟 Find First and Last Position of Element in Sorted Array (Medium) ⭐
 
 📋 **Full Question**
 Given a sorted array and a `target`, return `[firstIndex, lastIndex]` of the target. If absent, return `[-1, -1]`. Must be **O(log n)**.
@@ -701,7 +764,146 @@ private int findBound(int[] nums, int target, boolean findFirst) {
 
 ---
 
-## 🔟 Median of Two Sorted Arrays (Hard) ⭐ (Classic!)
+## 1️⃣1️⃣ Search a 2D Matrix (Medium) ⭐
+
+📋 **Full Question**
+Given an `m x n` matrix where each row is sorted left-to-right **and** the first element of each row is greater than the last element of the previous row (so the whole matrix is one big sorted list, row by row), return `true` if `target` exists. Must run in **O(log(m·n))**.
+- Input: `matrix = [[1,3,5,7],[10,11,16,20],[23,30,34,60]]`, `target = 3` → Output: `true`
+- Input: same matrix, `target = 13` → Output: `false`
+
+🗣️ **What to say first**
+- "Is this the fully-sorted version (last of a row < first of the next), or just each row and column sorted independently? (This matters — fully sorted lets me treat it as one flat array.)"
+- "They want O(log(m·n)) — so a single binary search over the virtual flattened array."
+
+**Approach 1 — Brute Force**
+Scan every cell.
+```java
+public boolean searchMatrixBrute(int[][] matrix, int target) {
+    for (int[] row : matrix) {
+        for (int v : row) {
+            if (v == target) return true;
+        }
+    }
+    return false;
+}
+```
+- ⏱️ Time: **O(m · n)**, Space: **O(1)**.
+- ❌ Why not enough: Ignores the sorted structure; interviewer wants logarithmic.
+
+**Approach 2 — Optimal (Binary Search on the Virtual 1D Array)**
+Treat the matrix as a flat sorted array of length `m·n`. Map a flat index `mid` to `matrix[mid / n][mid % n]`.
+
+```java
+public boolean searchMatrix(int[][] matrix, int target) {
+    int m = matrix.length, n = matrix[0].length;
+    int left = 0, right = m * n - 1;
+    while (left <= right) {
+        int mid = left + (right - left) / 2;
+        int value = matrix[mid / n][mid % n];   // map flat index → row/col
+        if (value == target) {
+            return true;
+        } else if (value < target) {
+            left = mid + 1;
+        } else {
+            right = mid - 1;
+        }
+    }
+    return false;
+}
+```
+
+🔍 **Dry-run on the example, `target = 3`:**
+- n=4, total=12. left=0, right=11, mid=5 → matrix[1][1]=11 > 3 → right=4.
+- left=0, right=4, mid=2 → matrix[0][2]=5 > 3 → right=1.
+- left=0, right=1, mid=0 → matrix[0][0]=1 < 3 → left=1.
+- left=1, right=1, mid=1 → matrix[0][1]=3 == target → return **true** ✅
+
+- ⏱️ Time: **O(log(m·n))**, Space: **O(1)**.
+
+> 💡 **Variant note:** If instead each row AND column is sorted but rows don't chain (LeetCode "Search a 2D Matrix II"), use the **staircase** method: start at the top-right corner, move left if too big, down if too small — O(m+n). Mention this so the interviewer sees you know both versions.
+
+🧠 **Algorithm to Remember Forever**
+- **Pattern:** Binary Search over a flattened 2D array.
+- **Core idea:** Index math `row = mid / n`, `col = mid % n` turns 2D into a single sorted line.
+- **Memory hook:** 🧵 **Unroll the grid into one long thread** of numbers, then binary search the thread.
+- **Trigger phrase:** *"sorted 2D matrix"* + *"find target in O(log)"*
+
+---
+
+## 1️⃣2️⃣ Koko Eating Bananas (Medium) ⭐ — Binary Search on the ANSWER
+
+📋 **Full Question**
+Koko eats bananas at speed `k` per hour. There are `piles[i]` bananas in each pile; each hour she eats from one pile (and if a pile has fewer than `k`, she finishes it and stops for that hour). Given `h` hours, find the **minimum integer speed `k`** to finish all bananas within `h` hours.
+- Input: `piles = [3,6,7,11]`, `h = 8` → Output: `4`
+- Input: `piles = [30,11,23,4,20]`, `h = 5` → Output: `30`
+
+🗣️ **What to say first**
+- "The answer (speed) ranges from 1 to max(piles), right?"
+- "Hours per pile = ceil(pile / k), and h ≥ number of piles is guaranteed?"
+- "I want the *minimum* speed that still finishes in time — so this is binary search on the answer."
+
+**Approach 1 — Brute Force**
+Try every speed `k` from 1 upward; return the first that finishes within `h`.
+```java
+public int minEatingSpeedBrute(int[] piles, int h) {
+    int maxPile = 0;
+    for (int p : piles) maxPile = Math.max(maxPile, p);
+    for (int k = 1; k <= maxPile; k++) {
+        if (hoursNeeded(piles, k) <= h) return k;
+    }
+    return maxPile;
+}
+private long hoursNeeded(int[] piles, int k) {
+    long hours = 0;
+    for (int p : piles) hours += (p + k - 1) / k; // ceil division
+    return hours;
+}
+```
+- ⏱️ Time: **O(maxPile · n)**, Space: **O(1)**.
+- ❌ Why not enough: Linear scan over speeds is slow when `maxPile` is huge (up to 10⁹).
+
+**Approach 2 — Optimal (Binary Search on Answer)**
+The "can finish in time?" check is **monotonic**: if speed `k` works, any larger speed also works. Binary search the smallest `k` that works.
+
+```java
+public int minEatingSpeed(int[] piles, int h) {
+    int left = 1, right = 0;
+    for (int p : piles) right = Math.max(right, p);  // max possible speed
+    while (left < right) {
+        int mid = left + (right - left) / 2;
+        if (hoursNeeded(piles, mid) <= h) {
+            right = mid;        // mid works → try slower
+        } else {
+            left = mid + 1;     // too slow → speed up
+        }
+    }
+    return left;               // smallest speed that finishes in time
+}
+private long hoursNeeded(int[] piles, int k) {
+    long hours = 0;
+    for (int p : piles) hours += (p + k - 1) / k;    // ceil(p / k)
+    return hours;
+}
+```
+
+🔍 **Dry-run on `[3,6,7,11]`, `h = 8`:**
+- left=1, right=11. mid=6 → hours = 1+1+2+2 = 6 ≤ 8 ✅ → right=6.
+- left=1, right=6. mid=3 → hours = 1+2+3+4 = 10 > 8 ❌ → left=4.
+- left=4, right=6. mid=5 → hours = 1+2+2+3 = 8 ≤ 8 ✅ → right=5.
+- left=4, right=5. mid=4 → hours = 1+2+2+3 = 8 ≤ 8 ✅ → right=4.
+- left==right=4 → answer **4** ✅
+
+- ⏱️ Time: **O(n · log(maxPile))**, Space: **O(1)**.
+
+🧠 **Algorithm to Remember Forever**
+- **Pattern:** Binary Search on the Answer (parametric / "monotone predicate").
+- **Core idea:** Don't search the array — search the *range of possible answers*; use a feasibility check.
+- **Memory hook:** 🍌 A **thermostat dial** — turn the speed dial up/down and check "does it finish in time?" until you land on the lowest comfortable setting.
+- **Trigger phrase:** *"minimum/maximum [rate/capacity/size] such that [condition holds]"*
+
+---
+
+## 1️⃣3️⃣ Median of Two Sorted Arrays (Hard) ⭐ (Classic!)
 
 📋 **Full Question**
 Given two sorted arrays `nums1` and `nums2`, return the median of the combined sorted array in **O(log(m+n))**.
@@ -784,7 +986,7 @@ public double findMedianSortedArrays(int[] nums1, int[] nums2) {
 
 ---
 
-## 1️⃣1️⃣ Find Peak Element (Medium) ⭐
+## 1️⃣4️⃣ Find Peak Element (Medium) ⭐
 
 📋 **Full Question**
 A peak is an element strictly greater than its neighbors. Given `nums` where `nums[-1] = nums[n] = -∞`, return the index of **any** peak in **O(log n)**.
@@ -845,21 +1047,128 @@ public int findPeakElement(int[] nums) {
 
 ---
 
+## 1️⃣5️⃣ Time Based Key-Value Store (Medium) ⭐
+
+📋 **Full Question**
+Design a `TimeMap` class supporting:
+- `set(String key, String value, int timestamp)` — store the value with that timestamp.
+- `get(String key, int timestamp)` — return the value with the **largest stored timestamp ≤ the queried timestamp**, or `""` if none. Timestamps for each key are strictly increasing across `set` calls.
+
+Example:
+```
+set("foo", "bar", 1)
+get("foo", 1)  → "bar"
+get("foo", 3)  → "bar"   (latest ≤ 3 is timestamp 1)
+set("foo", "bar2", 4)
+get("foo", 4)  → "bar2"
+get("foo", 5)  → "bar2"
+get("foo", 0)  → ""      (nothing ≤ 0)
+```
+
+🗣️ **What to say first**
+- "Are `set` calls for a given key guaranteed to arrive with strictly increasing timestamps? (Yes — so each key's list is already sorted, no need to re-sort.)"
+- "For `get`, I want the most recent value at or before the queried time — a 'floor' lookup, right?"
+- "If there's no value at or before the timestamp, return `""`?"
+
+**Approach 1 — Brute Force**
+Store a list per key; on `get`, linearly scan from the end for the largest timestamp ≤ query.
+```java
+class TimeMapBrute {
+    private final java.util.Map<String, java.util.List<int[]>> store = new java.util.HashMap<>();
+    private final java.util.Map<String, java.util.List<String>> values = new java.util.HashMap<>();
+
+    public void set(String key, String value, int timestamp) {
+        store.computeIfAbsent(key, x -> new java.util.ArrayList<>()).add(new int[]{timestamp});
+        values.computeIfAbsent(key, x -> new java.util.ArrayList<>()).add(value);
+    }
+
+    public String get(String key, int timestamp) {
+        java.util.List<int[]> times = store.get(key);
+        if (times == null) return "";
+        for (int i = times.size() - 1; i >= 0; i--) {     // scan from newest
+            if (times.get(i)[0] <= timestamp) return values.get(key).get(i);
+        }
+        return "";
+    }
+}
+```
+- ⏱️ Time: `set` **O(1)**, `get` **O(n)** per query (worst case scans the whole list).
+- ❌ Why not enough: When there are many timestamps per key and many queries, the linear `get` is slow — and the list is *already sorted*, so we can binary search it.
+
+**Approach 2 — Optimal (Sorted list per key + Binary Search for floor)**
+Because timestamps arrive increasing, each key's list is sorted. On `get`, binary-search for the rightmost timestamp ≤ query (a "floor" search).
+
+```java
+class TimeMap {
+    // Each key maps to a list of [timestamp, value] kept in insertion (= sorted) order.
+    private final java.util.Map<String, java.util.List<Pair>> map = new java.util.HashMap<>();
+
+    private static class Pair {
+        int timestamp;
+        String value;
+        Pair(int t, String v) { timestamp = t; value = v; }
+    }
+
+    public TimeMap() { }
+
+    public void set(String key, String value, int timestamp) {
+        map.computeIfAbsent(key, k -> new java.util.ArrayList<>())
+           .add(new Pair(timestamp, value));   // timestamps arrive increasing → stays sorted
+    }
+
+    public String get(String key, int timestamp) {
+        java.util.List<Pair> list = map.get(key);
+        if (list == null) return "";
+        int left = 0, right = list.size() - 1;
+        String result = "";
+        while (left <= right) {
+            int mid = left + (right - left) / 2;
+            if (list.get(mid).timestamp <= timestamp) {
+                result = list.get(mid).value;   // candidate; look for a later one
+                left = mid + 1;
+            } else {
+                right = mid - 1;                // too late; look earlier
+            }
+        }
+        return result;
+    }
+}
+```
+
+🔍 **Dry-run** (after `set("foo","bar",1)`, `set("foo","bar2",4)`):
+- `get("foo", 3)`: list = [(1,"bar"),(4,"bar2")]. left=0,right=1,mid=0 → ts 1 ≤ 3 → result="bar", left=1. mid=1 → ts 4 > 3 → right=0. Loop ends → **"bar"** ✅
+- `get("foo", 5)`: mid=0 → 1≤5 result="bar" left=1; mid=1 → 4≤5 result="bar2" left=2 → **"bar2"** ✅
+- `get("foo", 0)`: mid=0 → 1>0 → right=-1 → result stays **""** ✅
+
+- ⏱️ Time: `set` **O(1)** (amortized append), `get` **O(log n)**. Space: **O(total entries)**.
+
+🧠 **Algorithm to Remember Forever**
+- **Pattern:** Binary Search for **floor** (largest value ≤ target) on a per-key sorted list.
+- **Core idea:** Sorted-on-insert means no re-sorting; `get` is a floor binary search — keep the candidate when `ts ≤ query` and push right for a newer one.
+- **Memory hook:** ⏳ A **time machine with a dial** — spin to the queried moment and grab the *most recent snapshot that already existed* by then.
+- **Trigger phrase:** *"value at or before a given timestamp"* / *"most recent state ≤ time"*
+
+---
+
 ## 📊 Complexity Cheat Sheet
 
-| Problem | Brute Force | Optimal | Technique |
-|---------|-------------|---------|-----------|
-| Longest Substring w/o Repeating | O(n³) | **O(n)** | Variable Sliding Window |
-| Minimum Window Substring | O(n²·m) | **O(n+m)** | Sliding Window + need/have counters |
-| Longest Repeating Char Replacement | O(n²) | **O(n)** | Sliding Window + maxFreq |
-| Permutation in String | O(n·m log m) | **O(n)** | Fixed-Size Sliding Window |
-| Maximum Average Subarray I | O(n·k) | **O(n)** | Fixed-Size Sliding Window |
-| Fruit Into Baskets | O(n²) | **O(n)** | Sliding Window (≤ K distinct) |
-| Search in Rotated Sorted Array | O(n) | **O(log n)** | Modified Binary Search |
-| Koko Eating Bananas | O(maxPile·n) | **O(n·log maxPile)** | Binary Search on Answer |
-| Find First and Last Position | O(n) | **O(log n)** | Binary Search (lower/upper bound) |
-| Median of Two Sorted Arrays | O(m+n) | **O(log(min(m,n)))** | Binary Search on Partition |
-| Find Peak Element | O(n) | **O(log n)** | Binary Search (walk uphill) |
+| # | Problem | Brute Force | Optimal | Technique |
+|---|---------|-------------|---------|-----------|
+| 1 | Longest Substring w/o Repeating | O(n³) | **O(n)** | Variable Sliding Window |
+| 2 | Minimum Window Substring | O(n²·m) | **O(n+m)** | Sliding Window + need/have counters |
+| 3 | Longest Repeating Char Replacement | O(n²) | **O(n)** | Sliding Window + maxFreq |
+| 4 | Permutation in String | O(n·m log m) | **O(n)** | Fixed-Size Sliding Window |
+| 5 | Maximum Average Subarray I | O(n·k) | **O(n)** | Fixed-Size Sliding Window |
+| 6 | Fruit Into Baskets | O(n²) | **O(n)** | Sliding Window (≤ K distinct) |
+| 7 | Sliding Window Maximum | O(n·k) | **O(n)** | Sliding Window + Monotonic Deque |
+| 8 | Binary Search | O(n) | **O(log n)** | Classic Binary Search |
+| 9 | Search in Rotated Sorted Array | O(n) | **O(log n)** | Modified Binary Search |
+| 10 | Find First and Last Position | O(n) | **O(log n)** | Binary Search (lower/upper bound) |
+| 11 | Search a 2D Matrix | O(m·n) | **O(log(m·n))** | Binary Search on flattened grid |
+| 12 | Koko Eating Bananas | O(maxPile·n) | **O(n·log maxPile)** | Binary Search on Answer |
+| 13 | Median of Two Sorted Arrays | O(m+n) | **O(log(min(m,n)))** | Binary Search on Partition |
+| 14 | Find Peak Element | O(n) | **O(log n)** | Binary Search (walk uphill) |
+| 15 | Time Based Key-Value Store | get: O(n) | get: **O(log n)** | Binary Search for floor |
 
 ---
 
@@ -875,12 +1184,15 @@ public int findPeakElement(int[] nums) {
 | "contains a permutation/anagram of…" | Fixed-Size Sliding Window | 🚪 Conveyor belt | O(n) |
 | "subarray of size k with max/min …" | Fixed-Size Sliding Window | 🧮 Rolling odometer | O(n) |
 | "replace at most k characters" | Sliding Window + maxFreq | 🎨 k paint buckets | O(n) |
+| "max/min of every window of size k" | Sliding Window + Monotonic Deque | 🏔️ Mountain ridge | O(n) |
 | "sorted array" + "find / O(log n)" | Binary Search | 📖 Open the dictionary middle | O(log n) |
 | "sorted array that's rotated" | Modified Binary Search | 🃏 One pile stays in order | O(log n) |
 | "first and last position / range" | Binary Search lower/upper bound | 📏 Two bookmarks | O(log n) |
+| "sorted 2D matrix, find target" | Binary Search on flattened grid | 🧵 Unroll into a thread | O(log(m·n)) |
 | "minimum/maximum rate so that [condition]" | Binary Search on Answer | 🍌 Thermostat dial | O(n·log range) |
 | "find a peak / local maximum" | Binary Search (uphill) | ⛰️ Walk uphill | O(log n) |
 | "median of two sorted arrays in O(log…)" | Binary Search on Partition | ✂️ Guillotine cut | O(log(min(m,n))) |
+| "value at or before a timestamp" | Binary Search for floor | ⏳ Time machine dial | O(log n) |
 
 ---
 
@@ -895,7 +1207,7 @@ Microsoft interviewers *love* catching the naive `(left + right) / 2`. Use the s
 
 **2. Two binary-search loop shapes — know when to use which.**
 ```java
-// Shape A: searching for an exact value (Binary Search, First/Last Position)
+// Shape A: searching for an exact value (Binary Search, First/Last Position, 2D Matrix)
 while (left <= right) {  ...  left = mid + 1;  right = mid - 1;  }
 
 // Shape B: converging to a boundary (Find Peak, Koko, Binary Search on Answer)
@@ -903,12 +1215,28 @@ while (left < right)  {  ...  left = mid + 1;  right = mid;  }   // note: right 
 ```
 In Shape B, returning `left` (== `right`) gives the boundary. Mixing `right = mid` with `<=` causes infinite loops — be deliberate.
 
-**3. Ceil division without floating point.**
+**3. The "Binary Search on the Answer" template (memorize it).**
+Use when the question asks for the *minimum/maximum value such that a feasibility check passes*, and the check is **monotonic**.
+```java
+int left = LOWEST_POSSIBLE_ANSWER, right = HIGHEST_POSSIBLE_ANSWER;
+while (left < right) {
+    int mid = left + (right - left) / 2;
+    if (feasible(mid)) {
+        right = mid;       // mid works → can we do smaller? (for a MINIMUM)
+    } else {
+        left = mid + 1;    // mid fails → must go bigger
+    }
+}
+return left;               // smallest feasible answer
+// (For a MAXIMUM, flip: if (feasible(mid)) left = mid; else right = mid - 1; with mid = left + (right-left+1)/2)
+```
+
+**4. Ceil division without floating point.**
 ```java
 long hours = (pile + k - 1) / k;   // ceil(pile / k) — used in Koko
 ```
 
-**4. Frequency arrays beat HashMaps for fixed alphabets.**
+**5. Frequency arrays beat HashMaps for fixed alphabets.**
 ```java
 int[] count = new int[26];          // lowercase letters
 int[] ascii = new int[128];         // general ASCII
@@ -916,16 +1244,18 @@ count[c - 'a']++;                   // O(1), cache-friendly, no boxing
 ```
 Use `int[26]` / `int[128]` for sliding-window counters when the alphabet is fixed — it's faster and cleaner than `HashMap<Character,Integer>`.
 
-**5. `Map.merge` for clean count maps (variable alphabet).**
+**6. `Map.merge` for clean count maps (variable alphabet).**
 ```java
 count.merge(key, 1, Integer::sum);          // increment
 count.merge(key, -1, Integer::sum);         // decrement
 if (count.get(key) == 0) count.remove(key); // keep size == distinct count
 ```
 
-**6. Watch sum overflow in window sums.** If values are large or k is big, accumulate in a `long`, not an `int`.
+**7. `ArrayDeque` is the go-to deque** (Sliding Window Maximum). It's faster than `LinkedList` and supports `offerLast/pollLast/peekFirst` cleanly. Store **indices**, not values, so you can tell when the front slides out of the window.
 
-**7. The variable sliding-window skeleton (memorize it):**
+**8. Watch sum overflow in window sums.** If values are large or k is big, accumulate in a `long`, not an `int` (see Maximum Average).
+
+**9. The variable sliding-window skeleton (memorize it):**
 ```java
 int left = 0, best = 0;
 for (int right = 0; right < n; right++) {
@@ -951,6 +1281,7 @@ Before you say "I'm done," confirm:
 - [ ] 🔍 I did a **dry-run** on the example to prove correctness.
 - [ ] 🧱 I checked **edge cases**: empty/null input, single element, target absent, all-same values.
 - [ ] 🛡️ I used the **overflow-safe midpoint** `left + (right - left) / 2`.
+- [ ] 🔁 I picked the **right binary-search loop shape** (`<=` for exact value, `<` for boundary).
 - [ ] ⏱️ I stated **time AND space complexity** explicitly.
 - [ ] 🤝 I stayed **collaborative** — "Does this approach sound good to you?" beats silent typing.
 

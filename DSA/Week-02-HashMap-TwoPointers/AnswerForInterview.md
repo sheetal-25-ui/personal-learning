@@ -47,9 +47,7 @@ Given an array of integers `nums` and an integer `target`, return the **indices*
 
 ### 🗣️ What to say first
 - "Is the array sorted?" (No → HashMap shines.)
-- "Is there exactly one solution guaranteed?"
-- "Can the same index be reused?" (No.)
-- "Do you want indices or values back?"
+- "Is there exactly one solution guaranteed, and can I reuse an index?" (One solution; no reuse.)
 
 ### Approach 1 — Brute Force
 Check every pair.
@@ -111,8 +109,7 @@ Convert a Roman numeral string to an integer. Symbols: I=1, V=5, X=10, L=50, C=1
 - **Expected Output:** `1994`  (M=1000, CM=900, XC=90, IV=4)
 
 ### 🗣️ What to say first
-- "Is the input always a valid Roman numeral?" (Assume yes.)
-- "Always uppercase?" (Assume yes.)
+- "Is the input always a valid uppercase Roman numeral?" (Assume yes.)
 - "Max value range?" (Up to 3999 by convention.)
 
 ### Approach 1 — Brute Force
@@ -237,75 +234,7 @@ public int majorityElement(int[] nums) {
 
 ---
 
-## Problem 4: Subarray Sum Equals K 🧮 (Microsoft — VERY FREQUENT!)
-
-### 📋 Full Question
-Given an integer array `nums` and an integer `k`, return the **number of contiguous subarrays** whose sum equals `k`. Values can be negative.
-
-- **Input:** `nums = [1, 1, 1]`, `k = 2`
-- **Expected Output:** `2`  (subarrays `[1,1]` at indices 0-1 and 1-2)
-
-### 🗣️ What to say first
-- "Can numbers be negative?" (**Critical** — yes, so sliding window won't work; we need prefix sums.)
-- "Do we count overlapping subarrays separately?" (Yes.)
-- "Return the count or the subarrays themselves?" (Count.)
-
-### Approach 1 — Brute Force
-Try every start/end pair and sum it.
-
-```java
-public int subarraySumBrute(int[] nums, int k) {
-    int count = 0;
-    for (int start = 0; start < nums.length; start++) {
-        int sum = 0;
-        for (int end = start; end < nums.length; end++) {
-            sum += nums[end];
-            if (sum == k) count++;
-        }
-    }
-    return count;
-}
-```
-- **Time:** O(n²). **Space:** O(1).
-- ❌ Why not enough: O(n²) is too slow for large arrays — we recompute overlapping sums repeatedly.
-
-### Approach 2 — Optimal (Prefix Sum + HashMap)
-Track the running `prefixSum`. If at some point `prefixSum - k` was seen before, then the chunk between then and now sums to exactly `k`. Store how many times each prefix sum occurred. Seed the map with `{0: 1}` so subarrays starting at index 0 count.
-
-```java
-public int subarraySum(int[] nums, int k) {
-    Map<Integer, Integer> prefixCounts = new HashMap<>();
-    prefixCounts.put(0, 1);   // empty prefix has sum 0, seen once
-    int prefixSum = 0, count = 0;
-    for (int num : nums) {
-        prefixSum += num;
-        // If (prefixSum - k) existed, those many subarrays end here with sum k
-        count += prefixCounts.getOrDefault(prefixSum - k, 0);
-        prefixCounts.merge(prefixSum, 1, Integer::sum);
-    }
-    return count;
-}
-```
-
-**🔍 Dry run** on `[1, 1, 1]`, `k = 2`:
-| num | prefixSum | need (sum-k) | found count | total | map after |
-|-----|-----------|--------------|-------------|-------|-----------|
-| start | 0 | — | — | 0 | {0:1} |
-| 1 | 1 | -1 | 0 | 0 | {0:1, 1:1} |
-| 1 | 2 | 0 | 1 | 1 | {0:1, 1:1, 2:1} |
-| 1 | 3 | 1 | 1 | **2** ✅ | {0:1,1:1,2:1,3:1} |
-
-- **Time:** O(n). **Space:** O(n).
-
-### 🧠 Algorithm to Remember Forever
-- **Pattern:** Prefix Sum + HashMap (count of running sums).
-- **Core idea:** A subarray sum = (prefix at end) − (prefix at start); store seen prefixes to find matches in O(1).
-- **Memory hook:** 🛣️ *Mile markers on a highway* — distance between two markers = (later mile) − (earlier mile). You remember every marker you passed so you can instantly check distances.
-- **Trigger phrase:** *"number of subarrays that sum to k"* (especially with **negatives** → not sliding window).
-
----
-
-## Problem 5: Top K Frequent Elements 🔝 (Microsoft asked)
+## Problem 4: Top K Frequent Elements 🔝 (Microsoft asked)
 
 ### 📋 Full Question
 Given an integer array `nums` and an integer `k`, return the `k` most frequent elements (in any order).
@@ -315,8 +244,7 @@ Given an integer array `nums` and an integer `k`, return the `k` most frequent e
 
 ### 🗣️ What to say first
 - "Is `k` always valid (≤ number of distinct elements)?"
-- "Does order of the output matter?" (Usually no.)
-- "Any tie-breaking rule for equal frequencies?"
+- "Does output order matter, and is there a tie-break rule?" (Usually order-free, no tie-break.)
 
 ### Approach 1 — Brute Force (count + full sort)
 Count frequencies, then sort all distinct elements by frequency descending and take the top k.
@@ -381,6 +309,73 @@ public int[] topKFrequent(int[] nums, int k) {
 
 ---
 
+## Problem 5: Subarray Sum Equals K 🧮 (Microsoft — VERY FREQUENT!)
+
+### 📋 Full Question
+Given an integer array `nums` and an integer `k`, return the **number of contiguous subarrays** whose sum equals `k`. Values can be negative.
+
+- **Input:** `nums = [1, 1, 1]`, `k = 2`
+- **Expected Output:** `2`  (subarrays `[1,1]` at indices 0-1 and 1-2)
+
+### 🗣️ What to say first
+- "Can numbers be negative?" (**Critical** — yes, so sliding window won't work; we need prefix sums.)
+- "Do we count overlapping subarrays separately, and return the count or the subarrays?" (Overlaps count; return the count.)
+
+### Approach 1 — Brute Force
+Try every start/end pair and sum it.
+
+```java
+public int subarraySumBrute(int[] nums, int k) {
+    int count = 0;
+    for (int start = 0; start < nums.length; start++) {
+        int sum = 0;
+        for (int end = start; end < nums.length; end++) {
+            sum += nums[end];
+            if (sum == k) count++;
+        }
+    }
+    return count;
+}
+```
+- **Time:** O(n²). **Space:** O(1).
+- ❌ Why not enough: O(n²) is too slow for large arrays — we recompute overlapping sums repeatedly.
+
+### Approach 2 — Optimal (Prefix Sum + HashMap)
+Track the running `prefixSum`. If at some point `prefixSum - k` was seen before, then the chunk between then and now sums to exactly `k`. Store how many times each prefix sum occurred. Seed the map with `{0: 1}` so subarrays starting at index 0 count.
+
+```java
+public int subarraySum(int[] nums, int k) {
+    Map<Integer, Integer> prefixCounts = new HashMap<>();
+    prefixCounts.put(0, 1);   // empty prefix has sum 0, seen once
+    int prefixSum = 0, count = 0;
+    for (int num : nums) {
+        prefixSum += num;
+        // If (prefixSum - k) existed, those many subarrays end here with sum k
+        count += prefixCounts.getOrDefault(prefixSum - k, 0);
+        prefixCounts.merge(prefixSum, 1, Integer::sum);
+    }
+    return count;
+}
+```
+
+**🔍 Dry run** on `[1, 1, 1]`, `k = 2`:
+| num | prefixSum | need (sum-k) | found count | total | map after |
+|-----|-----------|--------------|-------------|-------|-----------|
+| start | 0 | — | — | 0 | {0:1} |
+| 1 | 1 | -1 | 0 | 0 | {0:1, 1:1} |
+| 1 | 2 | 0 | 1 | 1 | {0:1, 1:1, 2:1} |
+| 1 | 3 | 1 | 1 | **2** ✅ | {0:1,1:1,2:1,3:1} |
+
+- **Time:** O(n). **Space:** O(n).
+
+### 🧠 Algorithm to Remember Forever
+- **Pattern:** Prefix Sum + HashMap (count of running sums).
+- **Core idea:** A subarray sum = (prefix at end) − (prefix at start); store seen prefixes to find matches in O(1).
+- **Memory hook:** 🛣️ *Mile markers on a highway* — distance between two markers = (later mile) − (earlier mile). You remember every marker you passed so you can instantly check distances.
+- **Trigger phrase:** *"number of subarrays that sum to k"* (especially with **negatives** → not sliding window).
+
+---
+
 ## Problem 6: Longest Consecutive Sequence 🔗 (Microsoft asked)
 
 ### 📋 Full Question
@@ -391,8 +386,7 @@ Given an unsorted array `nums`, return the length of the longest run of **consec
 
 ### 🗣️ What to say first
 - "Can I sort?" (Sorting gives O(n log n); they usually want O(n).)
-- "Are there duplicates?" (A HashSet handles them naturally.)
-- "Can values be negative?" (Yes — set handles it.)
+- "Are there duplicates / can values be negative?" (Both fine — a HashSet handles them.)
 
 ### Approach 1 — Brute Force (sort then scan)
 Sort, then count consecutive runs.
@@ -457,7 +451,68 @@ public int longestConsecutive(int[] nums) {
 
 ---
 
-## Problem 7: Two Sum II — Input Array Is Sorted ↔️ (Microsoft asked)
+## Problem 7: First Unique Character in a String 🔤 (Microsoft asked)
+
+### 📋 Full Question
+Given a string `s`, return the **index** of the first non-repeating character. If none exists, return `-1`.
+
+- **Input:** `s = "leetcode"`
+- **Expected Output:** `0`  (`'l'` is the first character that never repeats)
+- Another: `s = "loveleetcode"` → `2` (`'v'`)
+
+### 🗣️ What to say first
+- "Only lowercase English letters?" (Often yes — lets me use a fixed size-26 array.)
+- "Return the index or the character?" (Index.)
+
+### Approach 1 — Brute Force (for each char, scan the rest)
+For each character, scan the whole string to check if it appears again.
+
+```java
+public int firstUniqCharBrute(String s) {
+    for (int i = 0; i < s.length(); i++) {
+        boolean unique = true;
+        for (int j = 0; j < s.length(); j++) {
+            if (j != i && s.charAt(j) == s.charAt(i)) { unique = false; break; }
+        }
+        if (unique) return i;
+    }
+    return -1;
+}
+```
+- **Time:** O(n²). **Space:** O(1).
+- ❌ Why not enough: re-scanning the string for every character is quadratic; a single frequency pass is far faster.
+
+### Approach 2 — Optimal (Frequency Map, two passes)
+Pass 1: count every character's frequency. Pass 2: walk left to right and return the first index whose count is exactly 1.
+
+```java
+public int firstUniqChar(String s) {
+    int[] freq = new int[26];                 // counts for 'a'..'z'
+    for (char c : s.toCharArray()) freq[c - 'a']++;
+
+    for (int i = 0; i < s.length(); i++) {
+        if (freq[s.charAt(i) - 'a'] == 1) return i; // first one seen exactly once
+    }
+    return -1;
+}
+```
+> If the alphabet isn't restricted, swap the `int[26]` for a `Map<Character, Integer>` built with `freq.merge(c, 1, Integer::sum)`.
+
+**🔍 Dry run** on `"leetcode"`:
+- freq → l:1, e:3, t:1, c:1, o:1, d:1
+- Pass 2: index 0 is 'l', freq 1 → return **0** ✅
+
+- **Time:** O(n) (two passes). **Space:** O(1) (fixed 26-slot array).
+
+### 🧠 Algorithm to Remember Forever
+- **Pattern:** Frequency Map + ordered second pass.
+- **Core idea:** Count first, then re-walk in order to honor "first."
+- **Memory hook:** 🎟️ *Roll call after tallying* — tally every name, then call the register in order; the first name called only once wins.
+- **Trigger phrase:** *"first non-repeating / first unique character."*
+
+---
+
+## Problem 8: Two Sum II — Input Array Is Sorted ↔️ (Microsoft asked)
 
 ### 📋 Full Question
 Given a **1-indexed sorted** array `numbers` and a `target`, return the two 1-based indices whose values sum to `target`. Use O(1) extra space. Exactly one solution.
@@ -466,9 +521,8 @@ Given a **1-indexed sorted** array `numbers` and a `target`, return the two 1-ba
 - **Expected Output:** `[1, 2]`  (1-indexed: numbers[1]=2, numbers[2]=7)
 
 ### 🗣️ What to say first
-- "The array is sorted — confirm ascending?" (Yes → two pointers!)
-- "1-indexed output?" (Yes per this variant.)
-- "O(1) space required?" (Yes — rules out the HashMap version.)
+- "The array is sorted ascending — confirm?" (Yes → two pointers!)
+- "1-indexed output and O(1) space required?" (Yes — rules out the HashMap version.)
 
 ### Approach 1 — Brute Force
 Same nested loop as classic Two Sum.
@@ -518,7 +572,7 @@ public int[] twoSumSorted(int[] numbers, int target) {
 
 ---
 
-## Problem 8: 3Sum 🎲 (Microsoft asked — REVISE!)
+## Problem 9: 3Sum 🎲 (Microsoft asked — REVISE!)
 
 ### 📋 Full Question
 Return **all unique triplets** `[a, b, c]` from `nums` such that `a + b + c = 0`. No duplicate triplets in the output.
@@ -528,8 +582,7 @@ Return **all unique triplets** `[a, b, c]` from `nums` such that `a + b + c = 0`
 
 ### 🗣️ What to say first
 - "Can I sort the array?" (Yes — sorting enables two pointers and easy dedup.)
-- "Must triplets be unique?" (Yes — I'll skip duplicates.)
-- "Indices or values?" (Values.)
+- "Must triplets be unique, values or indices?" (Unique triplets; values.)
 
 ### Approach 1 — Brute Force
 Three nested loops, dedup with a set.
@@ -596,7 +649,137 @@ public List<List<Integer>> threeSum(int[] nums) {
 
 ---
 
-## Problem 9: Sort Colors — Dutch National Flag 🚦 (Microsoft — CLASSIC!)
+## Problem 10: Valid Palindrome 🪞 (Microsoft asked)
+
+### 📋 Full Question
+Given a string `s`, return `true` if it is a palindrome considering **only alphanumeric characters** and ignoring case.
+
+- **Input:** `s = "A man, a plan, a canal: Panama"`
+- **Expected Output:** `true`  (cleaned: `"amanaplanacanalpanama"`)
+- Another: `s = "race a car"` → `false`
+
+### 🗣️ What to say first
+- "Do I ignore spaces, punctuation, and case?" (Yes.)
+- "Is an empty string a palindrome?" (Yes — returns true.)
+
+### Approach 1 — Brute Force (clean then reverse-compare)
+Build a cleaned, lowercased string, reverse it, and compare. Simple but uses extra space.
+
+```java
+public boolean isPalindromeBrute(String s) {
+    StringBuilder sb = new StringBuilder();
+    for (char c : s.toCharArray()) {
+        if (Character.isLetterOrDigit(c)) sb.append(Character.toLowerCase(c));
+    }
+    String cleaned = sb.toString();
+    String reversed = sb.reverse().toString();
+    return cleaned.equals(reversed);
+}
+```
+- **Time:** O(n). **Space:** O(n) (two extra strings).
+- ❌ Why not enough: correct, but builds extra strings; two pointers does it in O(1) space.
+
+### Approach 2 — Optimal (Two Pointers, opposite ends)
+Walk `left` inward and `right` inward. Skip non-alphanumeric characters. Compare lowercased characters; any mismatch means not a palindrome.
+
+```java
+public boolean isPalindrome(String s) {
+    int left = 0, right = s.length() - 1;
+    while (left < right) {
+        while (left < right && !Character.isLetterOrDigit(s.charAt(left))) left++;
+        while (left < right && !Character.isLetterOrDigit(s.charAt(right))) right--;
+        if (Character.toLowerCase(s.charAt(left)) != Character.toLowerCase(s.charAt(right))) {
+            return false; // mismatch -> not a palindrome
+        }
+        left++;
+        right--;
+    }
+    return true;
+}
+```
+
+**🔍 Dry run** on `"A man, a plan, a canal: Panama"`:
+- left lands on 'A', right lands on 'a' → equal (lowercased). Move inward.
+- Spaces, commas, colon are skipped each step.
+- Pointers keep matching ('m'/'m', 'a'/'a', ...) until they cross → **true** ✅
+
+- **Time:** O(n). **Space:** O(1).
+
+### 🧠 Algorithm to Remember Forever
+- **Pattern:** Two Pointers (opposite direction) with skip filter.
+- **Core idea:** Compare mirror positions, skipping characters that don't count.
+- **Memory hook:** 🪞 *Mirror walk* — two people walk toward a mirror's center; if every matched step looks identical, it's symmetric.
+- **Trigger phrase:** *"is it a palindrome / reads the same forwards and backwards."*
+
+---
+
+## Problem 11: Remove Duplicates from Sorted Array 🐢🐇 (Microsoft asked)
+
+### 📋 Full Question
+Given a **sorted** array `nums`, remove duplicates **in place** so each element appears once. Return the new length `k`; the first `k` slots must hold the unique values in order.
+
+- **Input:** `nums = [0, 0, 1, 1, 1, 2, 2, 3, 3, 4]`
+- **Expected Output:** `5`, with `nums` starting `[0, 1, 2, 3, 4, ...]`
+
+### 🗣️ What to say first
+- "Is the array sorted?" (Yes — duplicates are adjacent, which makes this easy.)
+- "Modify in place and return the count, not a new array?" (Yes.)
+
+### Approach 1 — Brute Force (build a new array / use a set)
+Collect uniques into a separate structure, then copy back. Uses extra space.
+
+```java
+public int removeDuplicatesBrute(int[] nums) {
+    LinkedHashSet<Integer> seen = new LinkedHashSet<>(); // preserves order
+    for (int n : nums) seen.add(n);
+    int i = 0;
+    for (int n : seen) nums[i++] = n;
+    return seen.size();
+}
+```
+- **Time:** O(n). **Space:** O(n) (the set).
+- ❌ Why not enough: uses O(n) extra space and ignores that the array is already sorted — two pointers needs no extra space.
+
+### Approach 2 — Optimal (Two Pointers, slow/fast)
+`slow` marks the last unique position written. `fast` scans ahead. When `fast` finds a value different from `nums[slow]`, advance `slow` and copy it in.
+
+```java
+public int removeDuplicates(int[] nums) {
+    if (nums.length == 0) return 0;
+    int slow = 0; // last unique value sits at index slow
+    for (int fast = 1; fast < nums.length; fast++) {
+        if (nums[fast] != nums[slow]) {
+            slow++;
+            nums[slow] = nums[fast]; // place the next unique value
+        }
+    }
+    return slow + 1; // count of uniques
+}
+```
+
+**🔍 Dry run** on `[0, 0, 1, 1, 1, 2, 2, 3, 3, 4]`:
+| fast | nums[fast] | nums[slow] | action | slow | array prefix |
+|------|-----------|-----------|--------|------|--------------|
+| 1 | 0 | 0 | equal, skip | 0 | [0,...] |
+| 2 | 1 | 0 | diff → slow=1, nums[1]=1 | 1 | [0,1,...] |
+| 4 | 1 | 1 | equal, skip | 1 | [0,1,...] |
+| 5 | 2 | 1 | diff → slow=2, nums[2]=2 | 2 | [0,1,2,...] |
+| 7 | 3 | 2 | diff → slow=3, nums[3]=3 | 3 | [0,1,2,3,...] |
+| 9 | 4 | 3 | diff → slow=4, nums[4]=4 | 4 | [0,1,2,3,4] |
+
+Return **5** ✅
+
+- **Time:** O(n). **Space:** O(1).
+
+### 🧠 Algorithm to Remember Forever
+- **Pattern:** Two Pointers (same direction, slow/fast write pointer).
+- **Core idea:** `slow` builds the clean prefix while `fast` scouts ahead for new values.
+- **Memory hook:** 🐢🐇 *Tortoise & hare* — the hare races ahead spotting new values; the tortoise only steps forward to plant each new one.
+- **Trigger phrase:** *"remove duplicates from sorted, in place"* / *"in-place compaction."*
+
+---
+
+## Problem 12: Sort Colors — Dutch National Flag 🚦 (Microsoft — CLASSIC!)
 
 ### 📋 Full Question
 Sort an array containing only `0`s, `1`s, and `2`s **in place**, in a single pass, without a library sort.
@@ -605,8 +788,7 @@ Sort an array containing only `0`s, `1`s, and `2`s **in place**, in a single pas
 - **Expected Output:** `[0, 0, 1, 1, 2, 2]`
 
 ### 🗣️ What to say first
-- "Only values 0, 1, 2?" (Yes.)
-- "In place required?" (Yes.)
+- "Only values 0, 1, 2, sorted in place?" (Yes.)
 - "Single pass / O(1) space?" (Yes — that's the point of Dutch National Flag.)
 
 ### Approach 1 — Brute Force (counting sort, two pass)
@@ -667,7 +849,7 @@ private void swap(int[] a, int i, int j) {
 
 ---
 
-## Problem 10: Trapping Rain Water 🌧️ (Microsoft — FREQUENT, HARD!)
+## Problem 13: Trapping Rain Water 🌧️ (Microsoft — FREQUENT, HARD!)
 
 ### 📋 Full Question
 Given `height` representing an elevation map (bar widths = 1), compute how much rainwater is trapped after raining.
@@ -677,8 +859,7 @@ Given `height` representing an elevation map (bar widths = 1), compute how much 
 
 ### 🗣️ What to say first
 - "Water above bar `i` = min(tallest to its left, tallest to its right) − height[i], if positive — agreed?"
-- "Can heights be 0?" (Yes.)
-- "Want O(1) space?" (The two-pointer version achieves it.)
+- "Can heights be 0, and do you want O(1) space?" (Yes, and the two-pointer version achieves it.)
 
 ### Approach 1 — Brute Force (scan left & right for each bar)
 For each bar, scan both directions for the max walls.
@@ -737,22 +918,184 @@ public int trap(int[] height) {
 
 ---
 
+## Problem 14: 4Sum 🎰 (Microsoft asked)
+
+### 📋 Full Question
+Return **all unique quadruplets** `[a, b, c, d]` from `nums` such that `a + b + c + d == target`. No duplicate quadruplets.
+
+- **Input:** `nums = [1, 0, -1, 0, -2, 2]`, `target = 0`
+- **Expected Output:** `[[-2, -1, 1, 2], [-2, 0, 0, 2], [-1, 0, 0, 1]]`
+
+### 🗣️ What to say first
+- "Can I sort, and must quadruplets be unique?" (Yes and yes.)
+- "Could the sum overflow `int`?" (Use `long` for the running sum to be safe.)
+
+### Approach 1 — Brute Force
+Four nested loops, dedup with a set.
+
+```java
+public List<List<Integer>> fourSumBrute(int[] nums, int target) {
+    Set<List<Integer>> result = new HashSet<>();
+    Arrays.sort(nums); // sort so each quad is in canonical order for dedup
+    int n = nums.length;
+    for (int i = 0; i < n; i++)
+        for (int j = i + 1; j < n; j++)
+            for (int k = j + 1; k < n; k++)
+                for (int l = k + 1; l < n; l++)
+                    if ((long) nums[i] + nums[j] + nums[k] + nums[l] == target)
+                        result.add(Arrays.asList(nums[i], nums[j], nums[k], nums[l]));
+    return new ArrayList<>(result);
+}
+```
+- **Time:** O(n⁴). **Space:** O(n) for the dedup set.
+- ❌ Why not enough: O(n⁴) is far too slow; fixing two numbers and two-pointering the rest is O(n³).
+
+### Approach 2 — Optimal (Sort + fix two + Two Pointers)
+Sort. Fix the outer two indices `i` and `j`, then run a two-pointer search on the remaining sorted subarray for the needed sum. Skip duplicates at every level. Use `long` to avoid overflow.
+
+```java
+public List<List<Integer>> fourSum(int[] nums, int target) {
+    Arrays.sort(nums);
+    List<List<Integer>> result = new ArrayList<>();
+    int n = nums.length;
+    for (int i = 0; i < n - 3; i++) {
+        if (i > 0 && nums[i] == nums[i - 1]) continue;           // skip dup first anchor
+        for (int j = i + 1; j < n - 2; j++) {
+            if (j > i + 1 && nums[j] == nums[j - 1]) continue;   // skip dup second anchor
+            int left = j + 1, right = n - 1;
+            while (left < right) {
+                long sum = (long) nums[i] + nums[j] + nums[left] + nums[right];
+                if (sum == target) {
+                    result.add(Arrays.asList(nums[i], nums[j], nums[left], nums[right]));
+                    left++; right--;
+                    while (left < right && nums[left] == nums[left - 1]) left++;   // skip dup
+                    while (left < right && nums[right] == nums[right + 1]) right--; // skip dup
+                } else if (sum < target) {
+                    left++;   // need bigger
+                } else {
+                    right--;  // need smaller
+                }
+            }
+        }
+    }
+    return result;
+}
+```
+
+**🔍 Dry run** on `[1, 0, -1, 0, -2, 2]`, target `0` → sorted `[-2, -1, 0, 0, 1, 2]`:
+- i=-2, j=-1: need 3 from `[0,0,1,2]`. left=0,right=2 → sum 1+(-2-1)= 1−3... compute directly: -2 + -1 + 0 + 2 = -1 (<0) → left++; -2 + -1 + 0 + 2 again with left at second 0 → still <0; left at 1: -2 -1 +1 +2 = 0 ✅ → `[-2,-1,1,2]`.
+- i=-2, j=0: -2 + 0 + 0 + 2 = 0 ✅ → `[-2,0,0,2]`.
+- i=-1, j=0: -1 + 0 + 0 + 1 = 0 ✅ → `[-1,0,0,1]`.
+- Result `[[-2,-1,1,2], [-2,0,0,2], [-1,0,0,1]]` ✅
+
+- **Time:** O(n³) — two fixed loops × inner two-pointer. **Space:** O(1) extra (ignoring output).
+
+### 🧠 Algorithm to Remember Forever
+- **Pattern:** Sort + Fix-Two + Two Pointers (the kSum generalization).
+- **Core idea:** Each extra "sum" target adds one fixed loop; the innermost 2Sum is always two pointers.
+- **Memory hook:** 🪢🪢 *Pin two knots, tighten the rope* — 3Sum pins one, 4Sum pins two, then squeeze the rest.
+- **Trigger phrase:** *"four numbers that sum to target"* — and generally *"kSum."*
+
+---
+
+## Problem 15: Intersection of Two Arrays II 🔁 (Microsoft asked)
+
+### 📋 Full Question
+Given two integer arrays `nums1` and `nums2`, return their **intersection including duplicates** — each element appears as many times as it shows in *both* arrays. Output order doesn't matter.
+
+- **Input:** `nums1 = [1, 2, 2, 1]`, `nums2 = [2, 2]`
+- **Expected Output:** `[2, 2]`
+- Another: `nums1 = [4,9,5]`, `nums2 = [9,4,9,8,4]` → `[4, 9]` (order-free)
+
+### 🗣️ What to say first
+- "Should duplicates be repeated in the result by how many times they appear in both?" (Yes — that's the 'II' twist.)
+- "Are the arrays sorted, and which is smaller?" (If unsorted, I'll hash the smaller one to save space.)
+
+### Approach 1 — Brute Force (nested scan with used markers)
+For each element of `nums1`, scan `nums2` for an unused match; mark it used so duplicates pair up correctly.
+
+```java
+public int[] intersectBrute(int[] nums1, int[] nums2) {
+    boolean[] used = new boolean[nums2.length];
+    List<Integer> result = new ArrayList<>();
+    for (int a : nums1) {
+        for (int j = 0; j < nums2.length; j++) {
+            if (!used[j] && nums2[j] == a) {
+                result.add(a);
+                used[j] = true; // consume this match so it can't pair again
+                break;
+            }
+        }
+    }
+    return result.stream().mapToInt(Integer::intValue).toArray();
+}
+```
+- **Time:** O(n × m). **Space:** O(m) for the used flags.
+- ❌ Why not enough: scanning `nums2` for every element of `nums1` is quadratic; a frequency map makes lookups O(1).
+
+### Approach 2 — Optimal (HashMap frequency count)
+Count frequencies of the smaller array. Walk the other array; when an element has remaining count, add it and decrement. This naturally caps each value at the min of its two counts.
+
+```java
+public int[] intersect(int[] nums1, int[] nums2) {
+    // Count the smaller array to minimize space
+    if (nums1.length > nums2.length) return intersect(nums2, nums1);
+
+    Map<Integer, Integer> count = new HashMap<>();
+    for (int n : nums1) count.merge(n, 1, Integer::sum);
+
+    List<Integer> result = new ArrayList<>();
+    for (int n : nums2) {
+        int remaining = count.getOrDefault(n, 0);
+        if (remaining > 0) {
+            result.add(n);             // pair one occurrence
+            count.put(n, remaining - 1); // consume it
+        }
+    }
+
+    int[] out = new int[result.size()];
+    for (int i = 0; i < out.length; i++) out[i] = result.get(i);
+    return out;
+}
+```
+> **Sorted-input variant:** if both arrays are sorted, use two pointers — advance the pointer at the smaller value, and on equality emit and advance both. O(1) extra space.
+
+**🔍 Dry run** on `nums1 = [1,2,2,1]`, `nums2 = [2,2]`:
+- count (from nums1) = {1:2, 2:2}
+- nums2: first 2 → remaining 2>0 → add 2, count{2:1}. Second 2 → remaining 1>0 → add 2, count{2:0}.
+- result `[2, 2]` ✅
+
+- **Time:** O(n + m). **Space:** O(min(n, m)) for the map.
+
+### 🧠 Algorithm to Remember Forever
+- **Pattern:** Frequency Map (count-and-consume) — or Two Pointers if both are sorted.
+- **Core idea:** Tally one side's counts, then "spend" them while scanning the other side.
+- **Memory hook:** 🎫 *Ticket stubs* — you hold a stub for each item in array A; every match in array B tears one stub off, so you never over-count.
+- **Trigger phrase:** *"intersection of two arrays"* + *"include duplicates / as many times as it appears in both."*
+
+---
+
 ## 📊 Complexity Cheat Sheet
 
-| Problem | Brute Force | Optimal | Technique |
-|---------|-------------|---------|-----------|
-| Two Sum | O(n²) / O(1) | O(n) / O(n) | Complement HashMap |
-| Roman to Integer | O(n) / O(n) | O(n) / O(1) | Lookahead compare |
-| Majority Element | O(n) / O(n) | O(n) / O(1) | Boyer-Moore Voting |
-| Subarray Sum = K | O(n²) / O(1) | O(n) / O(n) | Prefix Sum + HashMap |
-| Top K Frequent | O(n + m log m) / O(m) | O(n) / O(n) | Freq Map + Bucket Sort |
-| Longest Consecutive | O(n log n) / O(1) | O(n) / O(n) | HashSet streak-start |
-| Two Sum II (sorted) | O(n²) / O(1) | O(n) / O(1) | Two Pointers (opposite) |
-| 3Sum | O(n³) / O(n) | O(n²) / O(1) | Sort + Fix-One + Two Ptr |
-| Sort Colors | O(n) / O(1) (2-pass) | O(n) / O(1) (1-pass) | Dutch National Flag |
-| Trapping Rain Water | O(n²) / O(1) | O(n) / O(1) | Two Pointers + max |
+| # | Problem | Brute Force | Optimal | Technique |
+|---|---------|-------------|---------|-----------|
+| 1 | Two Sum | O(n²) / O(1) | O(n) / O(n) | Complement HashMap |
+| 2 | Roman to Integer | O(n) / O(n) | O(n) / O(1) | Lookahead compare |
+| 3 | Majority Element | O(n) / O(n) | O(n) / O(1) | Boyer-Moore Voting |
+| 4 | Top K Frequent | O(n + m log m) / O(m) | O(n) / O(n) | Freq Map + Bucket Sort |
+| 5 | Subarray Sum = K | O(n²) / O(1) | O(n) / O(n) | Prefix Sum + HashMap |
+| 6 | Longest Consecutive | O(n log n) / O(1) | O(n) / O(n) | HashSet streak-start |
+| 7 | First Unique Character | O(n²) / O(1) | O(n) / O(1) | Frequency Map (2-pass) |
+| 8 | Two Sum II (sorted) | O(n²) / O(1) | O(n) / O(1) | Two Pointers (opposite) |
+| 9 | 3Sum | O(n³) / O(n) | O(n²) / O(1) | Sort + Fix-One + Two Ptr |
+| 10 | Valid Palindrome | O(n) / O(n) | O(n) / O(1) | Two Pointers + skip filter |
+| 11 | Remove Duplicates (sorted) | O(n) / O(n) | O(n) / O(1) | Two Pointers (slow/fast) |
+| 12 | Sort Colors | O(n) / O(1) (2-pass) | O(n) / O(1) (1-pass) | Dutch National Flag |
+| 13 | Trapping Rain Water | O(n²) / O(1) | O(n) / O(1) | Two Pointers + max |
+| 14 | 4Sum | O(n⁴) / O(n) | O(n³) / O(1) | Sort + Fix-Two + Two Ptr |
+| 15 | Intersection of Two Arrays II | O(n × m) / O(m) | O(n + m) / O(min(n,m)) | Freq Map (count-and-consume) |
 
-*(m = number of distinct elements. Space for results excluded.)*
+*(m = number of distinct elements or second-array length, per problem. Space for results excluded.)*
 
 ---
 
@@ -764,15 +1107,18 @@ public int trap(int[] height) {
 |-----------------------------------|-----------------|---------------|---------|
 | "two numbers add up to target" + **unsorted** | Complement HashMap | 🧦 Sock drawer | O(n) / O(n) |
 | "two numbers add up to target" + **sorted**, O(1) space | Two Pointers (opposite) | 🎚️ Tuning dial | O(n) / O(1) |
+| "convert notation where order changes meaning" | Lookahead compare | 🪜 Dipping stairs | O(n) / O(1) |
 | "appears more than half the time", O(1) space | Boyer-Moore Voting | 🗳️ Election cancellation | O(n) / O(1) |
-| "number of subarrays summing to k" (+ negatives) | Prefix Sum + HashMap | 🛣️ Mile markers | O(n) / O(n) |
 | "top k most frequent / common" | Freq Map + Bucket/Heap | 🪣 Mailbox slots | O(n) / O(n) |
+| "number of subarrays summing to k" (+ negatives) | Prefix Sum + HashMap | 🛣️ Mile markers | O(n) / O(n) |
 | "longest consecutive run", unsorted, O(n) | HashSet streak-start | 🚂 Find the engine | O(n) / O(n) |
-| "three / four numbers sum to target" | Sort + Fix + Two Pointers | 🪢 Pin one knot | O(n²) / O(n³) |
+| "first non-repeating / first unique character" | Frequency Map + 2nd pass | 🎟️ Roll call | O(n) / O(1) |
+| "three / four numbers sum to target" | Sort + Fix + Two Pointers | 🪢 Pin one/two knots | O(n²) / O(n³) |
+| "is it a palindrome / reads same both ways" | Two Pointers (opposite) | 🪞 Mirror walk | O(n) / O(1) |
+| "remove duplicates from sorted, in place" | Two Pointers (slow/fast) | 🐢🐇 Tortoise & hare | O(n) / O(1) |
 | "sort 0s, 1s, 2s in one pass" | Dutch National Flag | 🇳🇱 Dutch flag | O(n) / O(1) |
 | "trapped water / elevation map" | Two Pointers + max | 🪣 Shortest stave | O(n) / O(1) |
-| "is it a palindrome / reverse-symmetric" | Two Pointers (opposite) | 🪞 Mirror walk | O(n) / O(1) |
-| "remove duplicates from sorted, in place" | Two Pointers (slow/fast) | 🐢🐇 Tortoise & hare | O(n) / O(1) |
+| "intersection with duplicates" | Freq Map count-and-consume | 🎫 Ticket stubs | O(n+m) / O(min(n,m)) |
 | "count / track what I've seen" | HashMap / HashSet | 👀 Memory notebook | O(n) / O(n) |
 
 ---
@@ -785,6 +1131,12 @@ These idioms make your interview code clean and senior-looking:
 ```java
 Map<Integer, Integer> freq = new HashMap<>();
 for (int n : nums) freq.merge(n, 1, Integer::sum); // freq[n] = freq.getOrDefault(n,0)+1
+```
+
+**Counting characters fast (lowercase only):**
+```java
+int[] freq = new int[26];
+for (char c : s.toCharArray()) freq[c - 'a']++; // 'a' maps to index 0
 ```
 
 **Safe reads (never NullPointerException):**
@@ -809,9 +1161,9 @@ for (Map.Entry<Integer, Integer> e : freq.entrySet()) {
 
 **Two-pointer skeletons to memorize:**
 ```java
-// Opposite ends (sorted-array pair problems)
+// Opposite ends (sorted-array pair problems, palindrome, trapping water)
 int left = 0, right = n - 1;
-while (left < right) { /* compare nums[left]+nums[right] to target */ }
+while (left < right) { /* compare / process, then move a pointer inward */ }
 
 // Same direction (slow/fast, in-place compaction)
 int slow = 0;
@@ -821,10 +1173,24 @@ for (int fast = 1; fast < n; fast++) {
 // length of unique prefix = slow + 1
 ```
 
+**kSum reduction skeleton (3Sum / 4Sum):**
+```java
+Arrays.sort(nums);
+// fix (k-2) anchors with for-loops, skipping duplicates,
+// then run a two-pointer 2Sum on the remaining suffix.
+// Use `long` for the running sum in 4Sum to avoid int overflow.
+```
+
 **Sorting + custom comparator (for 3Sum, Top K, etc.):**
 ```java
 Arrays.sort(nums);                                   // ascending in place
 list.sort((a, b) -> freq.get(b) - freq.get(a));      // by frequency desc
+```
+
+**Characters:**
+```java
+Character.isLetterOrDigit(c);   // alphanumeric filter (Valid Palindrome)
+Character.toLowerCase(c);       // normalize case
 ```
 
 **Watch-outs (classic Java interview traps):**
@@ -832,6 +1198,7 @@ list.sort((a, b) -> freq.get(b) - freq.get(a));      // by frequency desc
 - ⚠️ `int[]` has no `.length()` — it's `.length` (no parens). `String` uses `.length()`. `List` uses `.size()`.
 - ⚠️ Initialize `leftMax`/`rightMax` to 0 (heights are non-negative) — state this assumption aloud.
 - ⚠️ `Map.of(...)` is **immutable** — great for fixed lookup tables (Roman), but don't try to `put` into it.
+- ⚠️ In 4Sum, cast to `long` before summing four `int`s — four large values can overflow `int`.
 
 ---
 
@@ -852,3 +1219,5 @@ Before you say "I'm done," tick every box: 🎯
 > 💡 **Golden mantra:** *"Sorted? → Two Pointers. Counting / pairs / subarrays? → HashMap."* Say it under your breath when you're stuck, and the right pattern will surface. 🌟
 
 Good luck — you've got this! 💪🍀
+</content>
+</invoke>

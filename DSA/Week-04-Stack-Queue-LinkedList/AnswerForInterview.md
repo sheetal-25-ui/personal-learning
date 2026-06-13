@@ -2,6 +2,8 @@
 
 Welcome! This file is your **interview script** for Week 4. The goal isn't just to *solve* these problems — it's to *talk through them* like a Microsoft engineer would. Interviewers grade your **communication, structure, and trade-off thinking** as much as your code.
 
+This file covers **all 15 problems** in the week.
+
 ---
 
 ## 🏆 The Golden Rule of Every Answer
@@ -37,9 +39,7 @@ Never jump straight to the optimal code. The interviewer wants to *see your thin
 
 ## The Problems
 
-> We'll cover the 8 highest-value problems for Microsoft: **Valid Parentheses, Min Stack, Daily Temperatures, Reverse Linked List, Merge Two Sorted Lists, Linked List Cycle, Copy List with Random Pointer, and LRU Cache.**
-
-First, the shared building block you'll reuse all week:
+The shared building block you'll reuse all week:
 
 ```java
 // The standard singly linked list node — interviewers usually provide this.
@@ -134,7 +134,10 @@ Design a stack that supports `push`, `pop`, `top`, and retrieving the **minimum 
 - "Can values be duplicated?" (Yes — important for the second stack.)
 - "Are values within `int` range?"
 
-**Approach 1 — Brute Force (scan for min)**
+**Design choice (no real "brute force"):**
+One normal stack scans all elements for `getMin` → O(n). The problem demands **O(1)**, so we carry the running minimum. Choosing **two stacks** (the data stack + a parallel min stack) lets every operation stay O(1) and handles duplicates cleanly.
+
+**Approach 1 — Naive (scan for min)**
 One normal stack; `getMin` loops through all elements to find the minimum.
 
 ```java
@@ -255,7 +258,380 @@ Result: `[1,1,4,2,1,1,0,0]` ✅
 
 ---
 
-### 4️⃣ Reverse Linked List  ⭐⭐⭐ (Top 5 Microsoft — must do in 5 min)
+### 4️⃣ Evaluate Reverse Polish Notation  ⭐ (Stack Evaluation)
+
+📋 **Full Question**
+Evaluate the value of an arithmetic expression in **Reverse Polish Notation (RPN / postfix)**. Valid operators are `+`, `-`, `*`, `/`. Each operand may be an integer or another expression. Integer division truncates toward zero.
+- Input: `["2","1","+","3","*"]` → `((2+1)*3)` = `9`
+- Input: `["4","13","5","/","+"]` → `(4 + (13/5))` = `6`
+
+🗣️ **What to say first**
+- "Is the input always a **valid** RPN expression?" (Assume yes.)
+- "How does division behave — truncate toward zero?" (Yes, per spec.)
+- "Can numbers be negative or multi-digit?" (Yes — parse the whole token, don't read char-by-char.)
+
+**Approach 1 — Naive (recursive/manual parse)**
+You *could* repeatedly find the first operator and collapse it with the two tokens before it into a single value, rebuilding the list each time. That's O(n²) and fiddly.
+
+```java
+// Conceptual naive version: repeatedly find first operator, fold preceding two operands.
+// Each fold rebuilds the token list → O(n) per fold, O(n) folds → O(n²).
+```
+- **Time:** O(n²). **Space:** O(n).
+- ❌ Why it's not enough: rebuilding the list each fold is wasteful — a stack folds in a single pass.
+
+**Approach 2 — Optimal (Stack)**
+Push numbers. On an operator, pop the **top two** operands (order matters: the second pop is the left operand), apply, push the result. The final stack value is the answer.
+
+```java
+public int evalRPN(String[] tokens) {
+    Deque<Integer> stack = new ArrayDeque<>();
+    for (String tok : tokens) {
+        switch (tok) {
+            case "+": case "-": case "*": case "/":
+                int b = stack.pop();           // right operand (popped first)
+                int a = stack.pop();           // left operand
+                stack.push(apply(a, b, tok));
+                break;
+            default:
+                stack.push(Integer.parseInt(tok));  // handles negatives & multi-digit
+        }
+    }
+    return stack.pop();
+}
+
+private int apply(int a, int b, String op) {
+    switch (op) {
+        case "+": return a + b;
+        case "-": return a - b;
+        case "*": return a * b;
+        default:  return a / b;   // Java int division already truncates toward zero
+    }
+}
+```
+
+**🔬 Dry-run on `["2","1","+","3","*"]`:**
+- `2` → stack `[2]`
+- `1` → stack `[2,1]`
+- `+` → pop 1, pop 2 → 2+1=3 → `[3]`
+- `3` → `[3,3]`
+- `*` → pop 3, pop 3 → 3*3=9 → `[9]`
+- Answer: **9** ✅
+
+- **Time:** O(n). **Space:** O(n).
+
+🧠 **Algorithm to Remember Forever**
+- **Pattern:** *Stack-based expression evaluation.*
+- **Core idea:** Postfix is *made* for a stack — operands pile up, an operator consumes the two most recent.
+- **Memory hook:** 🧮 *An abacus where each operator grabs the last two beads, smushes them, and drops the result back on.*
+- **Trigger phrase:** "postfix / prefix / RPN", "evaluate expression", "calculator".
+
+---
+
+### 5️⃣ Next Greater Element I  ⭐ (Monotonic Stack + HashMap)
+
+📋 **Full Question**
+`nums1` is a **subset** of `nums2`. For each `x` in `nums1`, find the **next greater element** to its right *in `nums2`*. If none, answer `-1`.
+- Input: `nums1 = [4,1,2]`, `nums2 = [1,3,4,2]` → Output: `[-1,3,-1]`
+  - `4`: nothing greater to its right → `-1`
+  - `1`: next greater is `3` → `3`
+  - `2`: nothing greater to its right → `-1`
+
+🗣️ **What to say first**
+- "Are all elements **unique**?" (Yes per spec — lets us key a HashMap by value.)
+- "Is `nums1` always a subset of `nums2`?" (Yes.)
+- "What do I return if there's no greater element?" (-1.)
+
+**Approach 1 — Brute Force (nested scan)**
+For each value in `nums1`, find it in `nums2`, then scan rightward for the first greater value.
+
+```java
+public int[] nextGreaterElementBrute(int[] nums1, int[] nums2) {
+    int[] ans = new int[nums1.length];
+    for (int i = 0; i < nums1.length; i++) {
+        ans[i] = -1;
+        int j = 0;
+        while (nums2[j] != nums1[i]) j++;        // locate the element
+        for (int k = j + 1; k < nums2.length; k++) {
+            if (nums2[k] > nums1[i]) { ans[i] = nums2[k]; break; }
+        }
+    }
+    return ans;
+}
+```
+- **Time:** O(n1 × n2). **Space:** O(1) extra.
+- ❌ Why it's not enough: we re-scan `nums2` for every query — a monotonic stack precomputes all answers in one pass.
+
+**Approach 2 — Optimal (Monotonic Stack + HashMap)**
+Precompute, for every value in `nums2`, its next greater element using a **decreasing monotonic stack**, storing results in a HashMap. Then answer each `nums1` query in O(1).
+
+```java
+public int[] nextGreaterElement(int[] nums1, int[] nums2) {
+    Map<Integer, Integer> nextGreater = new HashMap<>();  // value -> its next greater
+    Deque<Integer> stack = new ArrayDeque<>();            // values, decreasing top→down
+    for (int n : nums2) {
+        // n resolves every smaller value still waiting on the stack
+        while (!stack.isEmpty() && n > stack.peek()) {
+            nextGreater.put(stack.pop(), n);
+        }
+        stack.push(n);
+    }
+    // anything left on the stack has no greater element → defaults to -1 below
+    int[] ans = new int[nums1.length];
+    for (int i = 0; i < nums1.length; i++) {
+        ans[i] = nextGreater.getOrDefault(nums1[i], -1);
+    }
+    return ans;
+}
+```
+
+**🔬 Dry-run on `nums2 = [1,3,4,2]`:**
+- `1` → stack `[1]`
+- `3` → 3>1 pop1, map{1→3} → push → `[3]`
+- `4` → 4>3 pop3, map{1→3,3→4} → push → `[4]`
+- `2` → 2<4 → push → `[4,2]`. Leftovers 4,2 have no greater → absent → -1.
+- Query `[4,1,2]` → `[-1, 3, -1]` ✅
+
+- **Time:** O(n1 + n2). **Space:** O(n2).
+
+🧠 **Algorithm to Remember Forever**
+- **Pattern:** *Monotonic stack* to precompute "next greater", plus a HashMap to answer queries.
+- **Core idea:** Same as Daily Temperatures — but store the *value* (not the distance), and route answers through a map because the query array is a subset.
+- **Memory hook:** 🧗 + 📒 *Tall person resolves the line; jot each answer in a notebook so later lookups are instant.*
+- **Trigger phrase:** "next greater element", "subset query", "to its right".
+
+---
+
+### 6️⃣ Largest Rectangle in Histogram  ⭐ (Hard — Monotonic Stack)
+
+📋 **Full Question**
+Given `heights` representing a histogram's bar heights (each bar width 1), return the **area of the largest rectangle** that fits inside.
+- Input: `[2,1,5,6,2,3]` → Output: `10` (bars of height 5 and 6 → width 2 × height 5 = 10)
+
+🗣️ **What to say first**
+- "Can heights be 0? Can the array be empty?" (Heights ≥ 0; handle empty → 0.)
+- "Are heights non-negative integers?" (Yes.)
+- "The rectangle must be contiguous and bounded by the *minimum* bar in its span — confirm?"
+
+**Approach 1 — Brute Force (expand around each bar)**
+For each bar `i`, treat its height as the limiting height and expand left/right while bars are ≥ `heights[i]`.
+
+```java
+public int largestRectangleBrute(int[] heights) {
+    int n = heights.length, best = 0;
+    for (int i = 0; i < n; i++) {
+        int left = i, right = i;
+        while (left  > 0      && heights[left  - 1] >= heights[i]) left--;
+        while (right < n - 1  && heights[right + 1] >= heights[i]) right++;
+        best = Math.max(best, heights[i] * (right - left + 1));
+    }
+    return best;
+}
+```
+- **Time:** O(n²). **Space:** O(1).
+- ❌ Why it's not enough: each bar may re-scan the whole array — too slow for large inputs.
+
+**Approach 2 — Optimal (Monotonic Increasing Stack of indices)**
+Keep a stack of indices with **increasing** heights. When a shorter bar arrives, pop taller bars and compute the rectangle each can form: its height × the width between the new boundary and the element now below it on the stack. A sentinel `0` at the end flushes everything.
+
+```java
+public int largestRectangleArea(int[] heights) {
+    Deque<Integer> stack = new ArrayDeque<>();   // indices, heights increasing top→down
+    int best = 0, n = heights.length;
+    for (int i = 0; i <= n; i++) {
+        int curr = (i == n) ? 0 : heights[i];    // sentinel 0 flushes the stack at the end
+        while (!stack.isEmpty() && heights[stack.peek()] >= curr) {
+            int height = heights[stack.pop()];   // the bar we're closing off
+            // width spans from the bar after the new top to i-1
+            int width = stack.isEmpty() ? i : i - stack.peek() - 1;
+            best = Math.max(best, height * width);
+        }
+        stack.push(i);
+    }
+    return best;
+}
+```
+
+**🔬 Dry-run on `[2,1,5,6,2,3]`:**
+- i=0 (2): push → `[0]`
+- i=1 (1<2): pop 0 (h=2), width = i=1 → area 2; push → `[1]`
+- i=2 (5): push → `[1,2]`
+- i=3 (6): push → `[1,2,3]`
+- i=4 (2<6): pop 3 (h=6), width = 4-2-1=1 → area 6; 2<5 pop 2 (h=5), width = 4-1-1=2 → **area 10**; push → `[1,4]`
+- i=5 (3): push → `[1,4,5]`
+- i=6 (sentinel 0): pop 5 (h=3) width 6-4-1=1 → 3; pop 4 (h=2) width 6-1-1=4 → 8; pop 1 (h=1) width 6 → 6.
+- Best = **10** ✅
+
+- **Time:** O(n) — each index pushed/popped once. **Space:** O(n).
+
+🧠 **Algorithm to Remember Forever**
+- **Pattern:** *Monotonic increasing stack* — find, for each bar, how far left and right it can extend.
+- **Core idea:** A bar's rectangle is bounded by the first **shorter** bar on each side. The stack reveals those boundaries as you pop.
+- **Memory hook:** 🏙️ *Skyline — each building can only stretch sideways until a shorter building blocks it.*
+- **Trigger phrase:** "largest rectangle", "max area histogram", "maximal rectangle" (2D version builds on this).
+
+---
+
+### 7️⃣ Implement Queue using Stacks  ⭐
+
+📋 **Full Question**
+Implement a **FIFO queue** (`push`, `pop`, `peek`, `empty`) using only **two stacks**.
+- `push(1); push(2); peek()` → `1`; `pop()` → `1`; `empty()` → `false`.
+
+🗣️ **What to say first**
+- "I can only use standard stack operations (push/pop/peek/isEmpty) — confirm?"
+- "Should operations be amortized O(1)? Or strict O(1)?" (Amortized O(1) is the expected answer.)
+- "Are calls always valid (no pop on empty)?" (Assume yes.)
+
+**Design choice (no real "brute force"):**
+A single stack is LIFO; a queue needs FIFO. The fix is **two stacks** — an `in` stack receives pushes, an `out` stack serves removals. Reversing elements once (in → out) flips LIFO into FIFO. We **only transfer when `out` is empty**, which gives amortized O(1) because each element moves between stacks at most once.
+
+**Approach — Two Stacks (lazy transfer)**
+
+```java
+class MyQueue {
+    private Deque<Integer> in  = new ArrayDeque<>();   // newest pushes land here
+    private Deque<Integer> out = new ArrayDeque<>();   // serves the front of the queue
+
+    public void push(int x) { in.push(x); }
+
+    public int pop() {
+        peek();                 // ensure out has the front element
+        return out.pop();
+    }
+
+    public int peek() {
+        if (out.isEmpty()) {                  // only refill when out is drained
+            while (!in.isEmpty()) out.push(in.pop());   // reverses order → FIFO
+        }
+        return out.peek();
+    }
+
+    public boolean empty() { return in.isEmpty() && out.isEmpty(); }
+}
+```
+
+**🔬 Dry-run:** `push(1)`, `push(2)` → in=`[2,1]`(top→bottom), out=`[]`. `peek()` drains in→out → out=`[1,2]`, returns **1**. `pop()` → out=`[2]`, returns **1**. `push(3)` → in=`[3]`. `pop()` → out non-empty, returns **2**. FIFO order 1,2,3 ✅
+
+- **Time:** push O(1); pop/peek **amortized O(1)** (each element transferred once). **Space:** O(n).
+
+🧠 **Algorithm to Remember Forever**
+- **Pattern:** *Two-stack simulation (lazy transfer).*
+- **Core idea:** Reversing a stack once flips LIFO into FIFO. Defer the transfer until `out` empties so each element moves at most once.
+- **Memory hook:** 🔄 *Pour water between two cups — the bottom of the first becomes the top of the second.*
+- **Trigger phrase:** "queue using stacks", "FIFO from LIFO".
+
+---
+
+### 8️⃣ Implement Stack using Queues  ⭐
+
+📋 **Full Question**
+Implement a **LIFO stack** (`push`, `pop`, `top`, `empty`) using only **queues** (FIFO).
+- `push(1); push(2); top()` → `2`; `pop()` → `2`; `empty()` → `false`.
+
+🗣️ **What to say first**
+- "Can I use one queue or two?" (One queue suffices with a rotate trick.)
+- "Which operation should be the costly one — push or pop?" (Here we make **push** O(n) so pop/top are O(1).)
+- "Standard queue ops only (offer/poll/peek)?" (Yes.)
+
+**Design choice (no real "brute force"):**
+A queue is FIFO; a stack needs the **last** pushed element out first. The trick: after enqueuing a new element, **rotate** the queue so the newest element sits at the *front*. Then `pop`/`top` are simple O(1) front operations. One queue is enough.
+
+**Approach — Single Queue (rotate on push)**
+
+```java
+class MyStack {
+    private Deque<Integer> q = new ArrayDeque<>();   // used strictly as a FIFO queue
+
+    public void push(int x) {
+        q.offer(x);                       // add to back
+        // rotate so the newly added element moves to the front
+        for (int i = 1; i < q.size(); i++) q.offer(q.poll());
+    }
+
+    public int pop()  { return q.poll(); }   // front is the most recently pushed
+    public int top()  { return q.peek(); }
+    public boolean empty() { return q.isEmpty(); }
+}
+```
+
+**🔬 Dry-run:** `push(1)` → q=`[1]`. `push(2)`: offer 2 → `[1,2]`, rotate once (move 1 to back) → `[2,1]`. `top()` = front = **2** ✅. `pop()` → **2**, q=`[1]`. `top()` = **1**. LIFO order ✅
+
+- **Time:** push O(n); pop/top/empty O(1). **Space:** O(n).
+
+🧠 **Algorithm to Remember Forever**
+- **Pattern:** *Single-queue rotation.*
+- **Core idea:** Keep the queue's front equal to the stack's top by rotating after every push.
+- **Memory hook:** 🎠 *A carousel — push a new horse on, then spin it around to the front.*
+- **Trigger phrase:** "stack using queues", "LIFO from FIFO".
+
+---
+
+### 9️⃣ Design Circular Queue  ⭐
+
+📋 **Full Question**
+Design a fixed-capacity **circular queue** (ring buffer) supporting `enQueue`, `deQueue`, `Front`, `Rear`, `isEmpty`, `isFull`. The last position connects back to the first to reuse space.
+- `MyCircularQueue(3); enQueue(1)→true; enQueue(2)→true; enQueue(3)→true; enQueue(4)→false (full); Rear()→3; isFull()→true; deQueue()→true; enQueue(4)→true; Rear()→4.`
+
+🗣️ **What to say first**
+- "Is the capacity fixed at construction?" (Yes.)
+- "Should operations return a boolean for success/failure?" (Yes per spec.)
+- "Can I use an array with head/tail indices and modular arithmetic?" (That's the canonical design.)
+
+**Design choice (no real "brute force"):**
+A plain array shift is O(n) per dequeue. Instead use a **fixed array + `head` index + `size` counter**. Modular arithmetic (`% capacity`) wraps indices around, so enqueue/dequeue are O(1) with no shifting. Tracking `size` avoids the classic "full vs empty look identical" ambiguity.
+
+**Approach — Array + head + size**
+
+```java
+class MyCircularQueue {
+    private final int[] data;
+    private int head;       // index of the front element
+    private int size;       // number of elements currently stored
+    private final int capacity;
+
+    public MyCircularQueue(int k) {
+        capacity = k;
+        data = new int[k];
+        head = 0;
+        size = 0;
+    }
+
+    public boolean enQueue(int value) {
+        if (isFull()) return false;
+        int tail = (head + size) % capacity;   // next free slot, wraps around
+        data[tail] = value;
+        size++;
+        return true;
+    }
+
+    public boolean deQueue() {
+        if (isEmpty()) return false;
+        head = (head + 1) % capacity;           // advance front, wraps around
+        size--;
+        return true;
+    }
+
+    public int Front() { return isEmpty() ? -1 : data[head]; }
+    public int Rear()  { return isEmpty() ? -1 : data[(head + size - 1) % capacity]; }
+    public boolean isEmpty() { return size == 0; }
+    public boolean isFull()  { return size == capacity; }
+}
+```
+
+**🔬 Dry-run (k=3):** enQueue 1,2,3 → data=[1,2,3], head=0, size=3. enQueue 4 → full → false. Rear = data[(0+3-1)%3]=data[2]=**3**. deQueue → head=1, size=2. enQueue 4 → tail=(1+2)%3=0 → data=[4,2,3], size=3. Rear = data[(1+3-1)%3]=data[0]=**4** ✅
+
+- **Time:** O(1) for all operations. **Space:** O(k).
+
+🧠 **Algorithm to Remember Forever**
+- **Pattern:** *Ring buffer — array + head index + size, modular arithmetic.*
+- **Core idea:** Don't shift elements; move *indices* and wrap with `% capacity`. Track `size` to disambiguate full vs empty.
+- **Memory hook:** 🎡 *A Ferris wheel of fixed seats — riders board and exit at moving positions, the wheel loops forever.*
+- **Trigger phrase:** "circular queue", "ring buffer", "fixed-size queue", "reuse space".
+
+---
+
+### 🔟 Reverse Linked List  ⭐⭐⭐ (Top 5 Microsoft — must do in 5 min)
 
 📋 **Full Question**
 Reverse a singly linked list and return the new head.
@@ -267,7 +643,7 @@ Reverse a singly linked list and return the new head.
 - "Do you want the iterative or recursive solution? I'll do iterative — it's O(1) space."
 
 **Approach 1 — Brute Force (extra storage)**
-Push all values to a stack (or list), then rebuild. Works but uses O(n) extra space.
+Push all values to a stack, then rebuild. Works but uses O(n) extra space.
 
 ```java
 public ListNode reverseListBrute(ListNode head) {
@@ -317,7 +693,7 @@ Return `prev = 3`. ✅
 
 ---
 
-### 5️⃣ Merge Two Sorted Lists  ⭐ (Very Frequent)
+### 1️⃣1️⃣ Merge Two Sorted Lists  ⭐ (Very Frequent)
 
 📋 **Full Question**
 Merge two **sorted** linked lists into one sorted list by splicing nodes together. Return the merged head.
@@ -379,7 +755,7 @@ public ListNode mergeTwoLists(ListNode l1, ListNode l2) {
 
 ---
 
-### 6️⃣ Linked List Cycle  ⭐ (Floyd's Tortoise & Hare)
+### 1️⃣2️⃣ Linked List Cycle  ⭐ (Floyd's Tortoise & Hare)
 
 📋 **Full Question**
 Given the head of a linked list, determine if it has a **cycle** (some node's `next` points back to an earlier node).
@@ -439,7 +815,65 @@ For a list with no cycle, `fast` eventually reaches `null` and we return `false`
 
 ---
 
-### 7️⃣ Copy List with Random Pointer  ⭐ (Frequent at Microsoft)
+### 1️⃣3️⃣ Add Two Numbers  ⭐ (Classic)
+
+📋 **Full Question**
+Two numbers are represented by linked lists, each node a single digit, stored in **reverse order** (ones digit first). Add them and return the sum as a linked list (also reverse order).
+- Input: `l1 = 2→4→3` (=342), `l2 = 5→6→4` (=465) → Output: `7→0→8` (=807)
+
+🗣️ **What to say first**
+- "Digits are stored **least-significant first** — confirm?" (Yes — this is why addition is easy: we add front-to-back.)
+- "Can the lists have **different lengths**?" (Yes — treat the missing digit as 0.)
+- "Should I handle a final **carry** that creates a new leading digit?" (Yes — e.g., 5+5=10 → `0→1`.)
+
+**Approach 1 — Naive (convert to integers)**
+Read each list into a number, add, rebuild a list. Fails for large inputs (overflow) and ignores the elegance of digit-by-digit addition.
+
+```java
+// Conceptual: build long from l1, build long from l2, sum, then split digits back into a list.
+// Breaks when the number exceeds long's range (lists can be very long).
+```
+- **Time:** O(n+m). **Space:** O(n+m).
+- ❌ Why it's not enough: integer/long **overflows** for long lists — we must add digit by digit.
+
+**Approach 2 — Optimal (Digit-by-digit with carry + dummy head)**
+Walk both lists together, summing digit + digit + carry. Use a **dummy head** to build the result; remember a leftover carry at the end.
+
+```java
+public ListNode addTwoNumbers(ListNode l1, ListNode l2) {
+    ListNode dummy = new ListNode(0), tail = dummy;
+    int carry = 0;
+    while (l1 != null || l2 != null || carry != 0) {   // continue while digits or carry remain
+        int sum = carry;
+        if (l1 != null) { sum += l1.val; l1 = l1.next; }
+        if (l2 != null) { sum += l2.val; l2 = l2.next; }
+        carry = sum / 10;                  // carry to the next digit
+        tail.next = new ListNode(sum % 10);// store this digit
+        tail = tail.next;
+    }
+    return dummy.next;
+}
+```
+
+**🔬 Dry-run on `2→4→3` + `5→6→4`:**
+- 2+5+0 = 7, carry 0 → `7`
+- 4+6+0 = 10, digit 0, carry 1 → `7→0`
+- 3+4+1 = 8, carry 0 → `7→0→8`
+- no more digits, carry 0 → stop. Result `7→0→8` (=807) ✅
+
+Edge: `5` + `5` → 5+5=10 → digit 0 carry 1 → loop again (carry≠0) → digit 1 → `0→1` (=10) ✅
+
+- **Time:** O(max(n,m)). **Space:** O(max(n,m)) for the output.
+
+🧠 **Algorithm to Remember Forever**
+- **Pattern:** *Elementary addition with carry* + *dummy head*.
+- **Core idea:** Reverse-order storage means we add exactly like grade-school arithmetic: lowest digit first, carry rolls forward. The loop condition `l1 || l2 || carry` handles unequal lengths and the final carry in one shot.
+- **Memory hook:** ➕ *Grade-school column addition — write the digit, carry the one.*
+- **Trigger phrase:** "add two numbers as lists", "digits in a list", "carry".
+
+---
+
+### 1️⃣4️⃣ Copy List with Random Pointer  ⭐ (Frequent at Microsoft)
 
 📋 **Full Question**
 Each node has `val`, `next`, **and** a `random` pointer (to any node or `null`). Return a **deep copy** — new nodes, with `next`/`random` mirroring the original structure.
@@ -509,7 +943,7 @@ public Node copyRandomList(Node head) {
 
 ---
 
-### 8️⃣ LRU Cache  ⭐⭐⭐ (Top 3 Microsoft — almost guaranteed)
+### 1️⃣5️⃣ LRU Cache  ⭐⭐⭐ (Top 3 Microsoft — almost guaranteed)
 
 📋 **Full Question**
 Design a **Least Recently Used** cache with capacity `C`. `get(key)` and `put(key, value)` must be **O(1)**. When full, evict the **least recently used** item on insert.
@@ -628,16 +1062,23 @@ class LRUCache {
 
 ## 📊 Complexity Cheat Sheet
 
-| Problem | Brute Force | Optimal | Technique |
-|---------|-------------|---------|-----------|
-| Valid Parentheses | O(n²) time | **O(n)** time, O(n) space | Stack (matching) |
-| Min Stack | O(n) getMin | **O(1)** all ops | Auxiliary min-stack |
-| Daily Temperatures | O(n²) | **O(n)** | Monotonic stack |
-| Reverse Linked List | O(n) time, O(n) space | O(n) time, **O(1)** space | 3-pointer flip |
-| Merge Two Sorted Lists | O(N log N) | **O(n+m)** time, O(1) space | Two-pointer + dummy |
-| Linked List Cycle | O(n) space | O(n) time, **O(1)** space | Fast & slow pointers |
-| Copy List w/ Random | O(n) space (map) | O(n) time, **O(1)** space | Node interleaving |
-| LRU Cache | O(n) evict | **O(1)** get/put | HashMap + Doubly LL |
+| # | Problem | Brute Force | Optimal | Technique |
+|---|---------|-------------|---------|-----------|
+| 1 | Valid Parentheses | O(n²) time | **O(n)** time, O(n) space | Stack (matching) |
+| 2 | Min Stack | O(n) getMin | **O(1)** all ops | Auxiliary min-stack |
+| 3 | Daily Temperatures | O(n²) | **O(n)** | Monotonic stack |
+| 4 | Evaluate RPN | O(n²) (naive folds) | **O(n)** time, O(n) space | Stack evaluation |
+| 5 | Next Greater Element I | O(n1 × n2) | **O(n1 + n2)** | Monotonic stack + HashMap |
+| 6 | Largest Rectangle in Histogram | O(n²) | **O(n)** time, O(n) space | Monotonic increasing stack |
+| 7 | Implement Queue using Stacks | — | **amortized O(1)** ops | Two-stack simulation |
+| 8 | Implement Stack using Queues | — | push O(n), pop/top **O(1)** | Single-queue rotation |
+| 9 | Design Circular Queue | O(n) shift (array) | **O(1)** all ops | Ring buffer (array + indices) |
+| 10 | Reverse Linked List | O(n) time, O(n) space | O(n) time, **O(1)** space | 3-pointer flip |
+| 11 | Merge Two Sorted Lists | O(N log N) | **O(n+m)** time, O(1) space | Two-pointer + dummy |
+| 12 | Linked List Cycle | O(n) space | O(n) time, **O(1)** space | Fast & slow pointers |
+| 13 | Add Two Numbers | O(n+m) (overflow risk) | **O(max(n,m))** | Digit add + carry + dummy |
+| 14 | Copy List w/ Random | O(n) space (map) | O(n) time, **O(1)** space | Node interleaving |
+| 15 | LRU Cache | O(n) evict | **O(1)** get/put | HashMap + Doubly LL |
 
 ---
 
@@ -650,13 +1091,18 @@ class LRUCache {
 | "valid / balanced / matching brackets / nested" | **Stack** | 🥞 Plates — last in, first out | O(n) |
 | "O(1) min/max" alongside a stack/queue | **Auxiliary aggregate stack** | 🪜 Sticky note on each plate | O(1) |
 | "next greater / warmer / smaller / span" | **Monotonic stack** | 🧗 Taller person resolves the line | O(n) |
+| "evaluate postfix / prefix / RPN / calculator" | **Stack evaluation** | 🧮 Abacus smushes last two beads | O(n) |
+| "next greater element of a subset" | **Monotonic stack + HashMap** | 🧗📒 Resolve line, jot answers | O(n) |
+| "largest rectangle / max area histogram" | **Monotonic increasing stack** | 🏙️ Skyline blocked by shorter building | O(n) |
+| "queue using stacks" | **Two-stack lazy transfer** | 🔄 Pour between two cups | Amortized O(1) |
+| "stack using queues" | **Single-queue rotation** | 🎠 Carousel spin to front | O(n) push |
+| "circular buffer / fixed-size queue" | **Array + head/size indices (mod)** | 🎡 Ferris wheel of slots | O(1) |
 | "reverse the list / reverse in place" | **3-pointer flip** | 🚂 Hold the next car before uncoupling | O(n), O(1) |
 | "merge two sorted lists" | **Two-pointer merge + dummy** | 🤝 Two queues merging | O(n+m) |
 | "detect cycle / find middle / nth from end" | **Fast & slow pointers** | 🐢🐇 Hare laps the tortoise | O(n), O(1) |
+| "add numbers stored as lists / carry" | **Digit add + carry + dummy** | ➕ Grade-school column addition | O(max(n,m)) |
 | "deep copy / clone with random pointer" | **Node interleaving / HashMap clone** | 👯 Twin standing right behind | O(n) |
 | "design a cache / O(1) get+put / LRU / evict" | **HashMap + Doubly Linked List** | 🎟️ Bouncer + velvet rope | O(1) |
-| "queue using stacks / stack using queues" | **Two-container simulation** | 🔄 Pour between two cups | Amortized O(1) |
-| "circular buffer / fixed-size queue" | **Array + head/tail indices (mod)** | 🎡 Ferris wheel of slots | O(1) |
 
 ---
 
@@ -678,15 +1124,26 @@ queue.peek();     // front without removing
 ```
 ⚠️ `ArrayDeque` **cannot hold `null`**. If you need nulls, use `LinkedList`.
 
-**3. Always reach for the `dummy head` on list-building problems.**
+**3. Standard `ListNode` definition (have it memorized).**
+```java
+class ListNode {
+    int val;
+    ListNode next;
+    ListNode() {}
+    ListNode(int val) { this.val = val; }
+    ListNode(int val, ListNode next) { this.val = val; this.next = next; }
+}
+```
+
+**4. Always reach for the `dummy head` on list-building problems.**
 ```java
 ListNode dummy = new ListNode(0), tail = dummy;
 // ... tail.next = something; tail = tail.next; ...
 return dummy.next;   // skips the placeholder, dodges all empty-list edge cases
 ```
-It eliminates the "is this the first node?" special case — a huge bug-reducer.
+Used in Merge Two Sorted Lists, Add Two Numbers, Reverse (brute), Copy List — it eliminates the "is this the first node?" special case.
 
-**4. Fast/slow pointer template (cycle, middle, palindrome).**
+**5. Fast/slow pointer template (cycle, middle, palindrome).**
 ```java
 ListNode slow = head, fast = head;
 while (fast != null && fast.next != null) {  // guard BOTH or you'll NPE
@@ -696,18 +1153,18 @@ while (fast != null && fast.next != null) {  // guard BOTH or you'll NPE
 // when loop ends, slow is at the middle (for even length, the 2nd middle)
 ```
 
-**5. The three-pointer reversal is muscle memory — save BEFORE you flip.**
+**6. The three-pointer reversal is muscle memory — save BEFORE you flip.**
 ```java
 ListNode next = curr.next;  // save first…
 curr.next = prev;           // …then flip. Reverse the order = lose the list.
 ```
 
-**6. `getOrDefault` keeps HashMap code clean.**
+**7. `getOrDefault` keeps HashMap code clean (Next Greater Element, LRU brute).**
 ```java
 map.put(key, map.getOrDefault(key, 0) + 1);
 ```
 
-**7. `LinkedHashMap` is a built-in LRU shortcut (mention, don't rely on it).**
+**8. `LinkedHashMap` is a built-in LRU shortcut (mention, don't rely on it).**
 ```java
 new LinkedHashMap<Integer,Integer>(cap, 0.75f, true) {  // true = access-order
     protected boolean removeEldestEntry(Map.Entry<Integer,Integer> e) {
@@ -716,7 +1173,13 @@ new LinkedHashMap<Integer,Integer>(cap, 0.75f, true) {  // true = access-order
 };
 ```
 
-**8. Null-safety on linked lists:** before `p.next.next`, confirm `p.next != null`. The #1 cause of `NullPointerException` in these problems.
+**9. Modular arithmetic for ring buffers (Circular Queue).**
+```java
+int tail = (head + size) % capacity;   // next free slot wraps around
+head = (head + 1) % capacity;          // advance front, wraps around
+```
+
+**10. Null-safety on linked lists:** before `p.next.next`, confirm `p.next != null`. The #1 cause of `NullPointerException` in these problems.
 
 ---
 
@@ -724,14 +1187,17 @@ new LinkedHashMap<Integer,Integer>(cap, 0.75f, true) {  // true = access-order
 
 Before you say "I'm done," tick every box:
 
-- [ ] 🗣️ **Did I clarify** before coding? (null/empty, duplicates, in-place, sorted, size)
-- [ ] 🪜 **Did I state the brute force first**, then improve to optimal? (Don't skip straight to the answer.)
+- [ ] 🗣️ **Did I clarify** before coding? (null/empty, duplicates, in-place, sorted, size, capacity)
+- [ ] 🪜 **Did I state the brute force first**, then improve to optimal? (For design problems, explain the data-structure choice instead.)
 - [ ] ✏️ **Did I dry-run a tiny example** on the whiteboard before coding?
-- [ ] 🧱 **Did I use a dummy head** for any list-building problem?
+- [ ] 🧱 **Did I use a dummy head** for any list-building problem? (Merge, Add Two Numbers, Copy)
 - [ ] 🐢🐇 **Did I guard `fast != null && fast.next != null`** in fast/slow loops?
 - [ ] 🚂 **Did I save `next` before flipping** in the reversal?
-- [ ] ⏱️ **Did I state BOTH time and space complexity** — and justify them?
-- [ ] 🧪 **Did I test edge cases?** empty list, single node, capacity 1, all duplicates, no cycle.
+- [ ] ➕ **Did I keep looping while `carry != 0`** in Add Two Numbers (final carry digit)?
+- [ ] 🧗 **Did I name the monotonic stack** for next-greater / histogram problems?
+- [ ] 🎡 **Did I use `% capacity` and track `size`** in the circular queue (full vs empty)?
+- [ ] ⏱️ **Did I state BOTH time and space complexity** — and justify them? (Note *amortized* O(1) for two-stack queue.)
+- [ ] 🧪 **Did I test edge cases?** empty list, single node, capacity 1, all duplicates, no cycle, unequal lengths, final carry.
 - [ ] 📛 **Did I name the pattern out loud?** ("This is a classic monotonic-stack / fast-slow-pointer problem.") Naming patterns signals seniority.
 - [ ] 🧹 **Is my code clean?** meaningful names, no dead code, handled the empty case.
 - [ ] 💬 **Did I narrate while coding**, not in silence? Microsoft grades communication heavily.
