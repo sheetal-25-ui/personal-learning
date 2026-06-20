@@ -330,7 +330,7 @@ Imagine you have 3 lockers at a gym, and 100 members. You assign each member a l
 This works great UNTIL you add a 4th locker. Now the rule is `locker = member_number % 4`. Almost EVERY member gets a different locker assignment. Everyone needs to move their stuff. Chaos!
 
 **Consistent hashing** solves this. When you add or remove a locker (server), only a few members (keys) need to move --- not all of them.
-
+Day
 #### Why does this matter?
 
 ```
