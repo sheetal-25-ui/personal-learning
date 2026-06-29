@@ -79,10 +79,10 @@ def subarraySum(nums, k):
 |---|---------|--------------|------------|------------|
 | 8 | Two Sum II (Sorted Array) | https://leetcode.com/problems/two-sum-ii-input-array-is-sorted/ | Medium | Yes |
 | 9 | 3Sum | https://leetcode.com/problems/3sum/ | Medium | Yes (revise) |
-| 10 | Valid Palindrome | https://leetcode.com/problems/valid-palindrome/ | Easy | Yes |
-| 11 | Remove Duplicates from Sorted Array | https://leetcode.com/problems/remove-duplicates-from-sorted-array/ | Easy | Yes |
-| 12 | Sort Colors (Dutch National Flag) | https://leetcode.com/problems/sort-colors/ | Medium | Yes (Classic!) |
-| 13 | Trapping Rain Water | https://leetcode.com/problems/trapping-rain-water/ | Hard | Yes (Frequent) |
+| 10 | Valid Palindrome | https://leetcode.com/problems/valid-palindrome/ | Easy | Yes | - 2
+| 11 | Remove Duplicates from Sorted Array | https://leetcode.com/problems/remove-duplicates-from-sorted-array/ | Easy | Yes | -2
+| 12 | Sort Colors (Dutch National Flag) | https://leetcode.com/problems/sort-colors/ | Medium | Yes (Classic!) | - 2
+| 13 | Trapping Rain Water | https://leetcode.com/problems/trapping-rain-water/ | Hard | Yes (Frequent) | -2
 
 ### Pattern: Two Pointers (Opposite Direction)
 ```python

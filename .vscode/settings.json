@@ -1,0 +1,11 @@
+{
+  "java.project.sourcePaths": [
+    "DSAPractise/Stack",
+    "DSAPractise/Queue",
+    "DSAPractise/LinkedList"
+  ],
+  "java.project.outputPath": "bin",
+  "files.exclude": {
+    "**/*.class": true
+  }
+}
